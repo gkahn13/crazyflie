@@ -1,9 +1,9 @@
 import rospy
 
-import CFData
-import CFImage
-import CFCommand
-import CFMotion
+from crazyflie.msg import CFData
+from crazyflie.msg import CFImage
+from crazyflie.msg import CFCommand
+from crazyflie.msg import CFMotion
 
 import logging
 # Only output errors from the logging framework
