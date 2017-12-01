@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import rospy
 
 from crazyflie.msg import CFData
@@ -86,7 +88,7 @@ if __name__ == '__main__':
 
     if not rospy.has_param('id') or not rospy.has_param('uri'):
         print("No ID or URI Specified! Abort.")
-        return
+	sys.exit(0)
 
     cf = CFNode(int(rospy.get_param('id', '0')), rospy.get_param('uri', DEFAULT_URI))
 

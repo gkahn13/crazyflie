@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import rospy
 from crazyflie.msg import CFData
 from crazyflie.msg import CFImage
