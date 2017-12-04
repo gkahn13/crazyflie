@@ -11,37 +11,36 @@ Right now there's nothing to install ;). These are just basic files, no pkg has 
 
 ## Functionality
 --------------
-###### CFNode {id}:
+###### Crazyflie {id}:
 * subscribes to cf/{id}/command and cf/{id}/motion
 * publishes to cf/data and cf/image
 
 
-###### GroundStationNode:
-* for each {id}
-    * subscribes to cf/data and cf/image
-    * publishes to cf/{id}/command and cf/{id}/motion
+###### Controller {id}:
+* subscribes to cf/{id}/data and cf/{id}/image
+* publishes to cf/{id}/command and cf/{id}/motion
 
 
 ## ROS Layout
 --------------
 #### NODES
 * cf_node.py
-* ground_node.py
+* controller_node.py
 
 
 #### TOPICS
-* /cf/images
-* /cf/data
+* /cf/{id}/images
+* /cf/{id}/data
 * /cf/{id}/motion
 * /cf/{id}/command
   
 
 #### MESSAGES
 
-###### CFImage
+<!-- ###### CFImage
 * uint16 ID
 * sensor_msgs/Image fpv_image
-
+ -->
 ###### CFData
 * uint16 ID
 * float accel_x

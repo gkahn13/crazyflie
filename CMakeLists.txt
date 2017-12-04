@@ -55,7 +55,6 @@ catkin_python_setup()
 # )
 add_message_files(
     FILES
-    CFImage.msg
     CFData.msg
     CFMotion.msg
     CFCommand.msg
@@ -209,5 +208,5 @@ include_directories(
 catkin_install_python(PROGRAMS nodes/cf_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-catkin_install_python(PROGRAMS nodes/ground_node.py
+catkin_install_python(PROGRAMS nodes/controller_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
