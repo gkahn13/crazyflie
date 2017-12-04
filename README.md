@@ -2,7 +2,7 @@
 
 ## Overview
 --------------
-This package allows for a swarm of Crazyflies to be controlled by a Ground Station computer. The basic idea here is that each Crazyflie (separated by ID) can be controlled separately through its own command and motion topics, and the data and images any Crazyflie publishes are all received by the Ground Station on only two topics. Instantiating a Crazyflie node should be done via the Ground Station. For now that means specifying an input file that holds the key value pairs of Crazyflie ID and Radio URI. We are currently looking into ways to use only one Radio URI to control multiple Crazyflies, which looks possible (see here: https://forum.bitcraze.io/viewtopic.php?t=624).
+This package allows for a swarm of Crazyflies to be controlled by a Ground Station computer. The basic idea here is that each Crazyflie (separated by ID) can be controlled separately through its own command and motion topics, and the data and images any Crazyflie publishes are all received by a Controller node. Instantiating a Crazyflie node should be done via the launch file cf.launch. You must have parameters 'id' and 'uri' for each launch file call. We are currently looking into ways to use only one Radio URI to control multiple Crazyflies, which looks possible. (see here: https://forum.bitcraze.io/viewtopic.php?t=624).
 
 ## Installation
 --------------
