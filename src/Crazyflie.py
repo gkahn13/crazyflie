@@ -66,7 +66,7 @@ class Crazyflie:
             print 'Invalid Command! %d' % msg.cmd
 
     def motion_cb(self, msg):
-        pass
+        self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
 
     ## COMMANDS ##
 
@@ -112,3 +112,5 @@ class Crazyflie:
         while not rospy.is_shutdown():
             rospy.spinOnce()
             rate.sleep()
+
+        self.cmd_estop()

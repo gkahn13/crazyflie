@@ -31,8 +31,8 @@ class Controller:
         self.data_sub = rospy.Subscriber('cf/%d/data' % ID, CFData, data_cb)
         self.image_sub = rospy.Subscriber('cf/%dimage' % ID, Image, image_cb)
 
-        self.cmd_pub = rospy.Publisher('cf/%d/command'%self._id, CFCommand, queue_size=10)
-        self.motion_pub = rospy.Publisher('cf/%d/motion'%self._id, CFMotion, queue_size=10)
+        self.cmd_pub = rospy.Publisher('cf/%d/command'% self.id, CFCommand, queue_size=10)
+        self.motion_pub = rospy.Publisher('cf/%d/motion'% self.id, CFMotion, queue_size=10)
 
     ## HELPERS ##
 
