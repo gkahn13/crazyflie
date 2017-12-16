@@ -1,4 +1,6 @@
 import rospy
+import numpy as np
+import cv2
 
 from crazyflie.msg import CFData
 # from crazyflie.msg import CFImage
@@ -94,12 +96,16 @@ class Crazyflie:
     # runs in parallel to main thread
     def image_thread(self):
         image_rate = rospy.Rate(20)
+        cap = cv2.VideoCapture(1)
+        cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
+        cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 240)
         while not rospy.is_shutdown():
-
-            image_mat = cv2.Mat() ## add code here
-
-            self.image_pub.publish(self.bridge.cv2_to_imgmsg(image_mat, image_mat.type()))
+            ret, frame = cap.read()
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.type()))
             rate.sleep()
+        cap.release()
+        cv2.destroyAllWindows()
 
 
     def run(self):
