@@ -92,11 +92,10 @@ class Crazyflie:
 
     ## IMAGE HANDLING / THREADS ##
 
-    # TODO: Katie can u figure this out lol -- gets images from camera and sends it across network
     # runs in parallel to main thread
     def image_thread(self):
         image_rate = rospy.Rate(20)
-        cap = cv2.VideoCapture(1)
+        cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
         cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
         cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 240)
         while not rospy.is_shutdown():
