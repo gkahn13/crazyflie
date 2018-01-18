@@ -73,7 +73,8 @@ class Controller:
                 self.motion_pub.publish(action)
             elif isinstance(action, CFCommand):
                 self.cmd_pub.publish(action)
-                print "CALLED COMMAND -> %s" % cmd_type[action.cmd]
+                print( "CALLED COMMAND -> %s" % cmd_type[action.cmd])
+
             else:
                 pass
 

@@ -19,7 +19,7 @@ import sys
 import threading
 
 import cv_bridge
-from cv_bridge import CvImage, CvBridge
+from cv_bridge import  CvBridge
 
 import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
@@ -84,8 +84,7 @@ class Crazyflie:
         elif cmd_type[msg.cmd] == 'TAKEOFF':
             self.cmd_takeoff()
         else:
-            print 'Invalid Command! %d' % msg.cmd
-
+            print('Invalid Command! %d' % msg.cmd)
     def motion_cb(self, msg):
         self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
 
