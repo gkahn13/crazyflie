@@ -23,6 +23,7 @@ from cv_bridge import CvImage, CvBridge
 
 import cflib.crtp
 from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
+from cflib.crazyflie.log import LogConfig
 
 ## for convenience
 cmd_type = ['']*3
@@ -38,6 +39,9 @@ class Crazyflie:
         self._id = cf_id
         self._uri = radio_uri
 
+
+        self.data = None
+
         self.bridge = CvBridge()
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
@@ -48,6 +52,21 @@ class Crazyflie:
             print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
             self.scf = None
             self.cf = None
+
+        try:
+            self.log_data = LogConfig(name="Data", period_in_ms=100)
+            self.log_data.add_variable('imu.acc_x', 'float')
+            self.log_data.add_variable('imu.acc_y', 'float')
+            self.log_data.add_variable('imu.acc_z', 'float')
+            self.log_data.add_variable('pm.vbat', 'float')
+            self.log_data.add_variable('posEstimatorAlt.estimatedZ', 'double')
+            self.cf.log.add_config(self.log_data)
+            self.log_data.data_received_cb.add_callback(self.received_data)
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add log config, bad configuration.')
 
         self.data_pub = rospy.Publisher('cf/data', CFData, queue_size=10)
         self.image_pub = rospy.Publisher('cf/image', CFImage, queue_size=10)
@@ -69,6 +88,18 @@ class Crazyflie:
 
     def motion_cb(self, msg):
         self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
+
+    def received_data(self, timestamp, data, logconf):
+        self.data = data
+        d = CFData()
+        d.ID = self._id
+        d.accel_x = float(data['imu.acc_x'])
+        d.accel_y = float(data['imu.acc_y'])
+        d.accel_z = float(data['imu.acc_z'])
+        d.v_batt = float(data['pm.vbat'])
+        d.alt = float(data['posEstimatorAlt.estimatedZ'])
+
+        self.data_pub.publish(d)
 
     ## COMMANDS ##
 
@@ -108,6 +139,8 @@ class Crazyflie:
 
 
     def run(self):
+        #begins logging and publishing
+        self.log_data.start()
 
         #handles image reads
         threading.Thread(target=self.image_thread).start()
