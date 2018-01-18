@@ -74,6 +74,7 @@ class Controller:
             elif isinstance(action, CFCommand):
                 self.cmd_pub.publish(action)
                 print( "CALLED COMMAND -> %s" % cmd_type[action.cmd])
+
             else:
                 pass
 
