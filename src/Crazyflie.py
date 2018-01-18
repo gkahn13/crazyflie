@@ -45,34 +45,43 @@ class Crazyflie:
         self.bridge = CvBridge()
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
-        try:
-            self.scf = SyncCrazyflie(URI)
-            self.cf = self.scf.cf
-        except e:
-            print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
-            self.scf = None
-            self.cf = None
+        # try:
+        with SyncCrazyflie(self._uri) as scf:
 
-        try:
-            self.log_data = LogConfig(name="Data", period_in_ms=100)
-            self.log_data.add_variable('imu.acc_x', 'float')
-            self.log_data.add_variable('imu.acc_y', 'float')
-            self.log_data.add_variable('imu.acc_z', 'float')
-            self.log_data.add_variable('pm.vbat', 'float')
-            self.log_data.add_variable('posEstimatorAlt.estimatedZ', 'double')
-            self.cf.log.add_config(self.log_data)
-            self.log_data.data_received_cb.add_callback(self.received_data)
-        except KeyError as e:
-            print('Could not start log configuration,'
-                  '{} not found in TOC'.format(str(e)))
-        except AttributeError:
-            print('Could not add log config, bad configuration.')
+            self.cf = scf.cf
+
+            self.cf.param.set_value('kalman.resetEstimation', '1')
+            time.sleep(0.1)
+            self.cf.param.set_value('kalman.resetEstimation', '0')
+            time.sleep(1.5)
+
+
+            # except Exception as e:
+            #     print(type(e))
+            #     print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
+            #     self.scf = None
+            #     self.cf = None
+
+            try:
+                self.log_data = LogConfig(name="Data", period_in_ms=100)
+                self.log_data.add_variable('imu.acc_x', 'float')
+                self.log_data.add_variable('imu.acc_y', 'float')
+                self.log_data.add_variable('imu.acc_z', 'float')
+                self.log_data.add_variable('pm.vbat', 'float')
+                self.log_data.add_variable('posEstimatorAlt.estimatedZ', 'float')
+                self.cf.log.add_config(self.log_data)
+                self.log_data.data_received_cb.add_callback(self.received_data)
+            except KeyError as e:
+                print('Could not start log configuration,'
+                      '{} not found in TOC'.format(str(e)))
+            except AttributeError:
+                print('Could not add log config, bad configuration.')
 
         self.data_pub = rospy.Publisher('cf/data', CFData, queue_size=10)
-        self.image_pub = rospy.Publisher('cf/image', CFImage, queue_size=10)
+        self.image_pub = rospy.Publisher('cf/image', Image, queue_size=10)
 
-        self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, command_cb)
-        self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, motion_cb)
+        self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
+        self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
 
     ## CALLBACKS ##
 
@@ -85,6 +94,7 @@ class Crazyflie:
             self.cmd_takeoff()
         else:
             print('Invalid Command! %d' % msg.cmd)
+
     def motion_cb(self, msg):
         self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
 

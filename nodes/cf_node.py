@@ -6,7 +6,7 @@ import sys
 
 sys.path.append( "/home/katiekang/catkin_ws/src/crazyflie/src")
 
-import Crazyflie
+from Crazyflie import Crazyflie
 
 import logging
 # Only output errors from the logging framework
@@ -18,6 +18,8 @@ import signal
 DEFAULT_URI = 'radio://0/80/250K'
 
 if __name__ == '__main__':
+
+    rospy.init_node('Crazyflie', anonymous=True)
 
     id_param = rospy.search_param('id')
     uri_param = rospy.search_param('uri')
@@ -34,8 +36,6 @@ if __name__ == '__main__':
 
  #    ID = int(rospy.get_param('id', '0'))
  #    URI = rospy.get_param('uri', DEFAULT_URI)
-
-    rospy.init_node('Crazyflie %d' % ID, anonymous=True)
 
     cf = Crazyflie(ID, URI)
     cf.run()

@@ -5,17 +5,19 @@ import sys
 
 sys.path.append("/home/katiekang/catkin_ws/src/crazyflie/src")
 
-import Controller
+from Controller import Controller
 
 
 if __name__ == '__main__':
 
+    rospy.init_node('Controller', anonymous=True)
 
-    if not rospy.has_param('~id'):
+    idParam = rospy.search_param('id')
+    if not idParam:
         print("No ID or URI Specified! Abort.")
     sys.exit(0)
 
-    ID = int(rospy.get_param('~id', '0'))
+    ID = int(rospy.get_param(idParam, '0'))
 
     # if not rospy.has_param('id'):
     #     print("No ID or URI Specified! Abort.")
@@ -24,7 +26,6 @@ if __name__ == '__main__':
     # ID = int(rospy.get_param('id', '0'))
 
 
-    rospy.init_node('Controller %d' % ID, anonymous=True)
     
     control = Controller(ID)
     control.run()
