@@ -64,9 +64,9 @@ class Crazyflie:
 
             try:
                 self.log_data = LogConfig(name="Data", period_in_ms=100)
-                self.log_data.add_variable('imu.acc_x', 'float')
-                self.log_data.add_variable('imu.acc_y', 'float')
-                self.log_data.add_variable('imu.acc_z', 'float')
+                self.log_data.add_variable('acc.x', 'float')
+                self.log_data.add_variable('acc.y', 'float')
+                self.log_data.add_variable('acc.z', 'float')
                 self.log_data.add_variable('pm.vbat', 'float')
                 self.log_data.add_variable('posEstimatorAlt.estimatedZ', 'float')
                 self.cf.log.add_config(self.log_data)
@@ -102,9 +102,9 @@ class Crazyflie:
         self.data = data
         d = CFData()
         d.ID = self._id
-        d.accel_x = float(data['imu.acc_x'])
-        d.accel_y = float(data['imu.acc_y'])
-        d.accel_z = float(data['imu.acc_z'])
+        d.accel_x = float(data['acc.x'])
+        d.accel_y = float(data['acc.y'])
+        d.accel_z = float(data['acc.z'])
         d.v_batt = float(data['pm.vbat'])
         d.alt = float(data['posEstimatorAlt.estimatedZ'])
 
@@ -136,8 +136,8 @@ class Crazyflie:
     def image_thread(self):
         image_rate = rospy.Rate(20)
         cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-        cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
-        cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 240)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
         while not rospy.is_shutdown():
             ret, frame = cap.read()
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -156,8 +156,6 @@ class Crazyflie:
 
         rate = rospy.Rate(10)
 
-        while not rospy.is_shutdown():
-            rospy.spinOnce()
-            rate.sleep()
+        rospy.spin()
 
         self.cmd_estop()
