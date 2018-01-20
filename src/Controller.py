@@ -78,5 +78,5 @@ class Controller:
             else:
                 pass
 
-            rospy.spinOnce()
+            # rospy.spinOnce()
             rate.sleep()
