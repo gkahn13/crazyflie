@@ -1,0 +1,16 @@
+<launch>
+    <arg name="id" default="0"/>
+    <arg name="uri" default="radio://0/80/250K"/>
+    <arg name="joy_topic" default="/joy"/>
+
+    <node name="joy_controller_node$(arg id)" pkg="crazyflie" type="joy_controller_node.py" output="screen">
+        <param name="id" value="$(arg id)"/>
+        <param name="joy_topic" value="$(arg joy_topic)"/>
+    </node>
+
+    <node name="cf_node$(arg id)" pkg="crazyflie" type="cf_node.py" output="screen">
+        <param name="id" value="$(arg id)"/>
+        <param name="uri" value="$(arg uri)"/>
+    </node>
+
+</launch>

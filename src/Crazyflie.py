@@ -22,7 +22,7 @@ import cv_bridge
 from cv_bridge import  CvBridge
 
 import cflib.crtp
-from cflib.crazyflie.syncCrazyflie import SyncCrazyflie
+from cflib.crazyflie import Crazyflie as CF
 from cflib.crazyflie.log import LogConfig
 
 ## for convenience
@@ -39,6 +39,9 @@ class Crazyflie:
         self._id = cf_id
         self._uri = radio_uri
 
+        self.cf_active = False
+
+        self.accept_commands = True
 
         self.data = None
 
@@ -46,59 +49,100 @@ class Crazyflie:
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
         # try:
-        with SyncCrazyflie(self._uri) as scf:
+        # with SyncCrazyflie(self._uri) as scf:
 
-            self.cf = scf.cf
+        self.cf = CF(rw_cache="./cache")
+        self.cf.connected.add_callback(self.connected)
+        self.cf.disconnected.add_callback(self.disconnected)
+        self.cf.connection_failed.add_callback(self.connection_lost)
+        self.cf.connection_lost.add_callback(self.connection_failed)
 
-            self.cf.param.set_value('kalman.resetEstimation', '1')
-            time.sleep(0.1)
-            self.cf.param.set_value('kalman.resetEstimation', '0')
-            time.sleep(1.5)
+        print('Connecting to %s' % radio_uri)
+        self.cf.open_link(radio_uri)
+
+        # self.cf.param.set_value('kalman.resetEstimation', '1')
+        # time.sleep(0.1)
+        # self.cf.param.set_value('kalman.resetEstimation', '0')
+        # time.sleep(1.5)
 
 
-            # except Exception as e:
-            #     print(type(e))
-            #     print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
-            #     self.scf = None
-            #     self.cf = None
+        # except Exception as e:
+        #     print(type(e))
+        #     print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
+        #     self.scf = None
+        #     self.cf = None
 
-            try:
-                self.log_data = LogConfig(name="Data", period_in_ms=100)
-                self.log_data.add_variable('acc.x', 'float')
-                self.log_data.add_variable('acc.y', 'float')
-                self.log_data.add_variable('acc.z', 'float')
-                self.log_data.add_variable('pm.vbat', 'float')
-                self.log_data.add_variable('posEstimatorAlt.estimatedZ', 'float')
-                self.cf.log.add_config(self.log_data)
-                self.log_data.data_received_cb.add_callback(self.received_data)
-            except KeyError as e:
-                print('Could not start log configuration,'
-                      '{} not found in TOC'.format(str(e)))
-            except AttributeError:
-                print('Could not add log config, bad configuration.')
+        
 
-        self.data_pub = rospy.Publisher('cf/data', CFData, queue_size=10)
-        self.image_pub = rospy.Publisher('cf/image', Image, queue_size=10)
+        self.data_pub = rospy.Publisher('cf/%d/data'%self._id, CFData, queue_size=10)
+        self.image_pub = rospy.Publisher('cf/%d/image'%self._id, Image, queue_size=10)
 
         self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
         self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
 
     ## CALLBACKS ##
+    def connected(self, uri):
+        print("Connected to Crazyflie at URI: %s" % uri)
+
+        self.cf_active = True
+
+        try:
+            self.log_data = LogConfig(name="Data", period_in_ms=100)
+            self.log_data.add_variable('acc.x', 'float')
+            self.log_data.add_variable('acc.y', 'float')
+            self.log_data.add_variable('acc.z', 'float')
+            self.log_data.add_variable('pm.vbat', 'float')
+            self.log_data.add_variable('stateEstimate.z', 'float')
+            self.cf.log.add_config(self.log_data)
+            self.log_data.data_received_cb.add_callback(self.received_data)
+
+
+            #begins logging and publishing
+            self.log_data.start()
+
+            print("Logging Setup Complete. Starting...")
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError:
+            print('Could not add log config, bad configuration.')
+
+
+    def disconnected(self, uri):
+        self.cf_active = False
+        print("Disconnected from Crazyflie at URI: %s" % uri)
+
+    def connection_failed(self, uri, msg):
+        self.cf_active = False
+        print("Connection Failed")
+
+    def connection_lost(self, uri, msg):
+        self.cf_active = False
+        print("Connection Lost")
 
     def command_cb(self, msg):
-        if cmd_type[msg.cmd] == 'ESTOP':
-            self.cmd_estop()
-        elif cmd_type[msg.cmd] == 'LAND':
-            self.cmd_land()
-        elif cmd_type[msg.cmd] == 'TAKEOFF':
-            self.cmd_takeoff()
+        if self.accept_commands:
+            print("RECEIVED COMMAND : %s" % cmd_type[msg.cmd])
+            if cmd_type[msg.cmd] == 'ESTOP':
+                self.cmd_estop()
+            elif cmd_type[msg.cmd] == 'LAND':
+                self.cmd_land()
+            elif cmd_type[msg.cmd] == 'TAKEOFF':
+                self.cmd_takeoff()
+            else:
+                print('Invalid Command! %d' % msg.cmd)
         else:
-            print('Invalid Command! %d' % msg.cmd)
+            print("Not Accepting Commands -- but one was sent!")
 
     def motion_cb(self, msg):
-        self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
+        if self.accept_commands:
+            self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
+        else:
+            print("Not Accepting Motion Commands -- but one was sent!")
 
     def received_data(self, timestamp, data, logconf):
+        # print("DATA RECEIVED")
+        # print(self.data)
         self.data = data
         d = CFData()
         d.ID = self._id
@@ -106,7 +150,8 @@ class Crazyflie:
         d.accel_y = float(data['acc.y'])
         d.accel_z = float(data['acc.z'])
         d.v_batt = float(data['pm.vbat'])
-        d.alt = float(data['posEstimatorAlt.estimatedZ'])
+        d.alt = float(data['stateEstimate.z'])
+        # d.alt = float(data['posEstimatorAlt.estimatedZ'])
 
         self.data_pub.publish(d)
 
@@ -116,8 +161,9 @@ class Crazyflie:
         self.cf.commander.send_hover_setpoint(vx, vy, yaw, alt)
 
     def cmd_estop(self):
-        print("---- Crazyflie %d Stopping ----" % self._id)
+        print("---- Crazyflie %d Emergency Stopping ----" % self._id)
         self.cf.commander.send_stop_setpoint()
+        self.accept_commands = False
 
     def cmd_takeoff(self, alt=0.4):
         for y in range(10):
@@ -134,22 +180,27 @@ class Crazyflie:
 
     # runs in parallel to main thread
     def image_thread(self):
-        image_rate = rospy.Rate(20)
-        cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-        while not rospy.is_shutdown():
-            ret, frame = cap.read()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.type()))
-            rate.sleep()
-        cap.release()
-        cv2.destroyAllWindows()
+        try: 
+            image_rate = rospy.Rate(20)
+            cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
+            while not rospy.is_shutdown():
+                ret, frame = cap.read()
+                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.type()))
+                rate.sleep()
+            cap.release()
+            cv2.destroyAllWindows()
+        except Exception as e:
+            print("CAMERA STREAM FAILED -- CHECK INPUTS")
 
 
     def run(self):
-        #begins logging and publishing
-        self.log_data.start()
+        print("WAITING FOR ACTIVE CONNECTION")
+        while not self.cf_active:
+            pass
+        print("FOUND ACTIVE CONNECTION")
 
         #handles image reads
         threading.Thread(target=self.image_thread).start()
@@ -159,3 +210,5 @@ class Crazyflie:
         rospy.spin()
 
         self.cmd_estop()
+        self.log_data.stop()
+        sys.exit(0)

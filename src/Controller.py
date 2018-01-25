@@ -18,6 +18,10 @@ cmd_type[CFCommand.LAND] = 'LAND'
 cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
 
 class Controller:
+
+    DO_NOTHING_CMD = CFMotion()
+
+
     def __init__(self, ID):
         self.id = ID
 
@@ -28,8 +32,8 @@ class Controller:
 
         #need to facilitate a set of publishers per cf node
 
-        self.data_sub = rospy.Subscriber('cf/%d/data' % ID, CFData, data_cb)
-        self.image_sub = rospy.Subscriber('cf/%dimage' % ID, Image, image_cb)
+        self.data_sub = rospy.Subscriber('cf/%d/data' % ID, CFData, self.data_cb)
+        self.image_sub = rospy.Subscriber('cf/%d/image' % ID, Image, self.image_cb)
 
         self.cmd_pub = rospy.Publisher('cf/%d/command'% self.id, CFCommand, queue_size=10)
         self.motion_pub = rospy.Publisher('cf/%d/motion'% self.id, CFMotion, queue_size=10)
@@ -48,6 +52,7 @@ class Controller:
         return cv_image
 
     def compute_motion(self):
+        print("Doing nothing -- ")
         return None
 
 
@@ -59,6 +64,9 @@ class Controller:
         pass
 
     def data_cb(self, msg):
+        # print("----------> Data CB: <--------")
+        # print(msg)
+        # print("------------------------------")
         self.data = msg
         pass
 
@@ -70,13 +78,16 @@ class Controller:
         while not rospy.is_shutdown():
             action = self.compute_motion()
             if isinstance(action, CFMotion):
-                self.motion_pub.publish(action)
+                if action != Controller.DO_NOTHING_CMD:
+                    self.motion_pub.publish(action)
+                else:
+                    print("--- DO NOTHING CMD SENT ---")
             elif isinstance(action, CFCommand):
                 self.cmd_pub.publish(action)
                 print( "CALLED COMMAND -> %s" % cmd_type[action.cmd])
 
             else:
                 pass
-
+            
             # rospy.spinOnce()
             rate.sleep()

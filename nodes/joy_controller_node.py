@@ -5,7 +5,7 @@ import sys
 
 sys.path.append("/home/katiekang/catkin_ws/src/crazyflie/src")
 
-from Controller import Controller
+from JoyController import JoyController
 
 
 if __name__ == '__main__':
@@ -19,7 +19,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     ID = int(rospy.get_param(idParam, '0'))
-    joy_topic = int(rospy.get_param(joyParam, '/joy'))
+    joy_topic = rospy.get_param(joyParam, '/joy')
 
     # if not rospy.has_param('id'):
     #     print("No ID or URI Specified! Abort.")
@@ -29,5 +29,5 @@ if __name__ == '__main__':
 
 
     
-    control = Controller(ID)
+    control = JoyController(ID, joy_topic)
     control.run()
