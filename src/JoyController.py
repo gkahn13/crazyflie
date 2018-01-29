@@ -16,15 +16,15 @@ from Controller import Controller
 
 import signal
 
-THROTTLE_AXIS = 1 # up 1
+THROTTLE_AXIS = 5 # up 1
 ROLL_AXIS = 2 #left 1
 PITCH_AXIS = 3 #up 1
 YAW_AXIS = 0 #left 1
 
-THROTTLE_SCALE = 0.5
+THROTTLE_SCALE = 0.1
 ROLL_SCALE = 0.5
 PITCH_SCALE = 0.5
-YAW_SCALE = 0.5
+YAW_SCALE = -120
 
 TAKEOFF_CHANNEL = 7 #RT
 ESTOP_CHANNEL = 2 #B
@@ -34,7 +34,6 @@ UNLOCK_ESTOP_CHANNEL = 0 #X
 TOLERANCE = 0.05
 ALT_TOLERANCE = 0.08
 
-MAX_ALT = 300
 
 #A is 1, Y is 3
 
@@ -72,22 +71,38 @@ class JoyController(Controller):
         elif self.curr_joy:
             motion = CFMotion()
             #TODO: update range
-            if self.data:
+            '''if self.data:
                 motion.alt = self.data.alt * 100 if self.data.alt > ALT_TOLERANCE else 0
                 print("ALT: %.3f" % motion.alt)
+                print(self.curr_joy.axes)
                 motion.alt += self.curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
                 if motion.alt < 0:
                     motion.alt = 0
                 elif motion.alt > MAX_ALT:
                     motion.alt = MAX_ALT
+
                 self.alt = motion.alt
+
             else:
-                motion.alt = 0
-            motion.vx = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
-            motion.vy = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
+                motion.alt_change = 0 '''
+            motion.vy = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
+            motion.vx = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
             motion.yaw = self.curr_joy.axes[YAW_AXIS] * YAW_SCALE
+
+            
+            print(self.curr_joy.axes)
+            motion.alt_change= self.curr_joy.axes[THROTTLE_AXIS]* THROTTLE_SCALE
+            print("ALT CHANGE: %.3f" % motion.alt_change)
+
+            #what is self.alt and where is it used??
+            #self.alt = motion.alt_change
+
+            # motion.vx = self.curr_joy.axes[3] * 0.1
+            # motion.vy = self.curr_joy.axes[4] * 0.1
+            # motion.yaw = self.curr_joy.axes[6] * 0.1
             
         return motion
+    
 
 
     def dead_band(self, signal):
@@ -102,12 +117,39 @@ class JoyController(Controller):
             if msg.buttons[ESTOP_CHANNEL] and not self.curr_joy.buttons[ESTOP_CHANNEL]:
                 #takeoff
                 self.cmd = CFCommand.ESTOP
+                print("CALLING ESTOP")
             elif msg.buttons[TAKEOFF_CHANNEL] and not self.curr_joy.buttons[TAKEOFF_CHANNEL]:
                 #takeoff
                 self.cmd = CFCommand.TAKEOFF
+                print("CALLING TAKEOFF")
             elif msg.buttons[LAND_CHANNEL] and not self.curr_joy.buttons[LAND_CHANNEL]:
                 #takeoff
                 self.cmd = CFCommand.LAND
-            
+                print("CALLING LAND")
+        else:
+            if msg.buttons[ESTOP_CHANNEL] :
+                #takeoff
+                self.cmd = CFCommand.ESTOP
+                print("CALLING ESTOP")
+            elif msg.buttons[TAKEOFF_CHANNEL] :
+                #takeoff
+                self.cmd = CFCommand.TAKEOFF
+                print("CALLING TAKEOFF")
+            elif msg.buttons[LAND_CHANNEL] :
+                #takeoff
+                self.cmd = CFCommand.LAND
+                print("CALLING LAND")
+            '''
+
+        if self.curr_joy:
+            if msg.buttons[ESTOP_CHANNEL] and not self.curr_joy.buttons[ESTOP_CHANNEL]:
+                #takeoff
+                self.cmd = CFCommand.ESTOP
+            elif msg.axes[2] and not self.curr_joy.axes[2]:
+                #takeoff
+                self.cmd = CFCommand.TAKEOFF
+            elif msg.axes[5] and not self.curr_joy.axes[5]:
+                #takeoff
+                self.cmd = CFCommand.LAND'''
         self.dead_band(msg)
         self.curr_joy = msg

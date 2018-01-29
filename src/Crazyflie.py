@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.ERROR)
 import time
 import signal
 import sys
+import os
 
 import threading
 
@@ -24,6 +25,9 @@ from cv_bridge import  CvBridge
 import cflib.crtp
 from cflib.crazyflie import Crazyflie as CF
 from cflib.crazyflie.log import LogConfig
+
+MAX_ALT = 1
+
 
 ## for convenience
 cmd_type = ['']*3
@@ -39,11 +43,16 @@ class Crazyflie:
         self._id = cf_id
         self._uri = radio_uri
 
+        self.stop_sig = False
+
+        signal.signal(signal.SIGINT, self.signal_handler)
+
         self.cf_active = False
 
-        self.accept_commands = True
+        self.accept_commands = False
 
         self.data = None
+        self.alt = 0
 
         self.bridge = CvBridge()
 
@@ -79,6 +88,15 @@ class Crazyflie:
 
         self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
         self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
+
+    def signal_handler(self, sig, frame):
+        if self.cf_active:
+            self.cmd_estop()
+        self.stop_sig = True
+        rospy.signal_shutdown("CtrlC")
+
+        #killing
+        os.kill(os.getpgrp(), signal.SIGKILL)
 
     ## CALLBACKS ##
     def connected(self, uri):
@@ -121,24 +139,42 @@ class Crazyflie:
         print("Connection Lost")
 
     def command_cb(self, msg):
+        print("ALT: %.3f" % self.alt)
         if self.accept_commands:
             print("RECEIVED COMMAND : %s" % cmd_type[msg.cmd])
             if cmd_type[msg.cmd] == 'ESTOP':
                 self.cmd_estop()
             elif cmd_type[msg.cmd] == 'LAND':
+                self.alt = 0
                 self.cmd_land()
             elif cmd_type[msg.cmd] == 'TAKEOFF':
+                self.alt = 0.4
                 self.cmd_takeoff()
             else:
                 print('Invalid Command! %d' % msg.cmd)
+        elif cmd_type[msg.cmd] == 'TAKEOFF':
+            self.alt = 0.4
+            self.cmd_takeoff()
         else:
             print("Not Accepting Commands -- but one was sent!")
 
     def motion_cb(self, msg):
+        print("ALT: %.3f" % self.alt)
         if self.accept_commands:
-            self.set_motion(msg.vx, msg.vy, msg.yaw, msg.alt)
+            self.update_alt(msg)
+            self.set_motion(msg.vx, msg.vy, msg.yaw, self.alt)
         else:
             print("Not Accepting Motion Commands -- but one was sent!")
+
+    def update_alt(self, msg):
+        
+        #what exactly does this do?
+        #motion.alt = self.data.alt * 100 if self.data.alt > ALT_TOLERANCE else 0
+        self.alt += msg.alt_change
+        if self.alt < 0:
+            self.alt = 0
+        elif self.alt > MAX_ALT:
+            self.alt = MAX_ALT
 
     def received_data(self, timestamp, data, logconf):
         # print("DATA RECEIVED")
@@ -167,13 +203,19 @@ class Crazyflie:
 
     def cmd_takeoff(self, alt=0.4):
         for y in range(10):
+            print("taking off")
             self.cf.commander.send_hover_setpoint(0, 0, 0, y / 10 * alt)
             time.sleep(0.1)
+        self.accept_commands = True
 
     def cmd_land(self, alt=0.4):
-        for y in range(10):
-            self.cf.commander.send_hover_setpoint(0, 0, 0, alt - (y / 10 * alt))
-            time.sleep(0.1)
+        if self.accept_commands==False:
+            print("cannot land right now")
+        else:
+            for y in range(10):
+                self.cf.commander.send_hover_setpoint(0, 0, 0, alt - (y / 10 * alt))
+                time.sleep(0.1)
+            self.cmd_estop()
 
 
     ## IMAGE HANDLING / THREADS ##
@@ -185,7 +227,7 @@ class Crazyflie:
             cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            while not rospy.is_shutdown():
+            while not rospy.is_shutdown() and not stop_sig:
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.type()))
@@ -209,6 +251,4 @@ class Crazyflie:
 
         rospy.spin()
 
-        self.cmd_estop()
         self.log_data.stop()
-        sys.exit(0)

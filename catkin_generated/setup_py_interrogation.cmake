@@ -1,0 +1,6 @@
+set(crazyflie_SETUP_PY_VERSION "0.0.0")
+set(crazyflie_SETUP_PY_SCRIPTS "")
+set(crazyflie_SETUP_PY_PACKAGES "crazyflie")
+set(crazyflie_SETUP_PY_PACKAGE_DIRS "src/crazyflie")
+set(crazyflie_SETUP_PY_MODULES "")
+set(crazyflie_SETUP_PY_MODULE_DIRS "")

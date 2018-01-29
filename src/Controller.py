@@ -78,10 +78,10 @@ class Controller:
         while not rospy.is_shutdown():
             action = self.compute_motion()
             if isinstance(action, CFMotion):
-                if action != Controller.DO_NOTHING_CMD:
-                    self.motion_pub.publish(action)
-                else:
-                    print("--- DO NOTHING CMD SENT ---")
+                # if action != Controller.DO_NOTHING_CMD:
+                self.motion_pub.publish(action)
+                # else:
+                #     print("--- DO NOTHING CMD SENT ---")
             elif isinstance(action, CFCommand):
                 self.cmd_pub.publish(action)
                 print( "CALLED COMMAND -> %s" % cmd_type[action.cmd])

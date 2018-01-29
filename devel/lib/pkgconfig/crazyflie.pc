@@ -1,0 +1,8 @@
+prefix=/home/katiekang/catkin_ws/src/crazyflie/devel
+
+Name: crazyflie
+Description: Description of crazyflie
+Version: 0.0.0
+Cflags: -I/home/katiekang/catkin_ws/src/crazyflie/devel/include
+Libs: -L/home/katiekang/catkin_ws/src/crazyflie/devel/lib 
+Requires: 

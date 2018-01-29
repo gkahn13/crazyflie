@@ -1,0 +1,2 @@
+- setup-file:
+    local-name: /home/katiekang/catkin_ws/src/crazyflie/devel/setup.sh
