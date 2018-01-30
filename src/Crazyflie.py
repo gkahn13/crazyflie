@@ -227,15 +227,19 @@ class Crazyflie:
             cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            while not rospy.is_shutdown() and not stop_sig:
+            while not rospy.is_shutdown() and not self.stop_sig:
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.type()))
-                rate.sleep()
+                # self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.dtype.type))
+                cv2.imshow('frame', gray)
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    break
+                image_rate.sleep()
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:
             print("CAMERA STREAM FAILED -- CHECK INPUTS")
+            print("Error: " + str(e))
 
 
     def run(self):
