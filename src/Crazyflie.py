@@ -230,7 +230,7 @@ class Crazyflie:
             while not rospy.is_shutdown() and not self.stop_sig:
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                # self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.dtype.type))
+                self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.dtype.type))
                 cv2.imshow('frame', gray)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
