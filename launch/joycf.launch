@@ -15,4 +15,8 @@
         <param name="uri" value="$(arg uri)"/>
     </node>
 
+    <node name="cam_node$(arg id)" pkg="crazyflie" type="py3_cam_node.py" output="screen">
+        <param name="id" value="$(arg id)"/>
+    </node>
+
 </launch>

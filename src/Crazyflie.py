@@ -1,10 +1,9 @@
 import rospy
 import numpy as np
-import cv2
 
 from crazyflie.msg import CFData
 # from crazyflie.msg import CFImage
-from sensor_msgs.msg import Image
+# from sensor_msgs.msg import Image
 from crazyflie.msg import CFCommand
 from crazyflie.msg import CFMotion
 
@@ -19,14 +18,12 @@ import os
 
 import threading
 
-import cv_bridge
-from cv_bridge import  CvBridge
-
 import cflib.crtp
 from cflib.crazyflie import Crazyflie as CF
 from cflib.crazyflie.log import LogConfig
 
 MAX_ALT = 1
+
 
 
 ## for convenience
@@ -54,7 +51,7 @@ class Crazyflie:
         self.data = None
         self.alt = 0
 
-        self.bridge = CvBridge()
+        # self.bridge = CvBridge()
 
         cflib.crtp.init_drivers(enable_debug_driver=False)
         # try:
@@ -84,7 +81,7 @@ class Crazyflie:
         
 
         self.data_pub = rospy.Publisher('cf/%d/data'%self._id, CFData, queue_size=10)
-        self.image_pub = rospy.Publisher('cf/%d/image'%self._id, Image, queue_size=10)
+        # self.image_pub = rospy.Publisher('cf/%d/image'%self._id, Image, queue_size=10)
 
         self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
         self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
@@ -217,31 +214,6 @@ class Crazyflie:
                 time.sleep(0.1)
             self.cmd_estop()
 
-
-    ## IMAGE HANDLING / THREADS ##
-
-    # runs in parallel to main thread
-    def image_thread(self):
-        try: 
-            image_rate = rospy.Rate(20)
-            cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 320)
-            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 240)
-            while not rospy.is_shutdown() and not self.stop_sig:
-                ret, frame = cap.read()
-                gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                # self.image_pub.publish(self.bridge.cv2_to_imgmsg(gray, gray.dtype.type))
-                cv2.imshow('frame', gray)
-                if cv2.waitKey(1) & 0xFF == ord('q'):
-                    break
-                image_rate.sleep()
-            cap.release()
-            cv2.destroyAllWindows()
-        except Exception as e:
-            print("CAMERA STREAM FAILED -- CHECK INPUTS")
-            print("Error: " + str(e))
-
-
     def run(self):
         print("WAITING FOR ACTIVE CONNECTION")
         while not self.cf_active:
@@ -249,7 +221,7 @@ class Crazyflie:
         print("FOUND ACTIVE CONNECTION")
 
         #handles image reads
-        threading.Thread(target=self.image_thread).start()
+        # threading.Thread(target=self.image_thread).start()
 
         rate = rospy.Rate(10)
 
