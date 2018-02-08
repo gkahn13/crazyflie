@@ -5,6 +5,8 @@ import numpy as np
 
 from PIL import Image
 
+import io
+
 import cv2
 
 
@@ -29,8 +31,6 @@ class Controller:
     def __init__(self, ID):
         self.id = ID
 
-        self.bridge = cv_bridge.CvBridge()
-
         self.mat = None
         self.data = None
 
@@ -42,19 +42,6 @@ class Controller:
         self.cmd_pub = rospy.Publisher('cf/%d/command'% self.id, CFCommand, queue_size=10)
         self.motion_pub = rospy.Publisher('cf/%d/motion'% self.id, CFMotion, queue_size=10)
 
-    ## HELPERS ##
-
-    def convert_to_cv(self, msg):
-        if msg is None:
-            return None
-
-        try:
-            cv_image = self.bridge.imgmsg_to_cv2(msg, msg.encoding)
-        except cv_bridge.CvBridgeError as e:
-            return None
-
-        return cv_image
-
     def compute_motion(self):
         print("Doing nothing -- ")
         return None
@@ -64,8 +51,8 @@ class Controller:
     ## CALLBACKS ## 
 
     def image_cb(self, msg):
-        pil_jpg = BytesIO(msg.data)
-        pil_arr = Image.open(recon_pil_jpg).convert('L') #grayscale
+        pil_jpg = io.BytesIO(msg.data)
+        pil_arr = Image.open(pil_jpg).convert('L') #grayscale
 
         self.mat = np.array(pil_arr)
 
