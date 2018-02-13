@@ -8,7 +8,7 @@ from PIL import Image
 import io
 
 import cv2
-
+import math
 
 from sensor_msgs.msg import CompressedImage
 from crazyflie.msg import CFData
@@ -26,6 +26,8 @@ cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
 class Controller:
 
     DO_NOTHING_CMD = CFMotion()
+
+    COLLISION_THRESH = 0.25
 
 
     def __init__(self, ID):
@@ -46,7 +48,9 @@ class Controller:
         print("Doing nothing -- ")
         return None
 
-
+    def observedCollision(self):
+        xy_mag = math.sqrt(self.data.accel_x ** 2 + self.data.accel_y ** 2)
+        return xy_mag > self.COLLISION_THRESH
 
     ## CALLBACKS ## 
 
@@ -72,6 +76,15 @@ class Controller:
     def run(self):
         rate = rospy.Rate(10) # 10Hz
         while not rospy.is_shutdown():
+            if self.data and self.observedCollision():
+                print("-- COLLISION : E-stopping --")
+                action = CFCommand()
+                action.cmd = CFCommand.ESTOP
+                self.cmd_pub.publish(action)
+                #sleep for 2 seconds
+                rospy.Rate(1.0/2).sleep()
+
+
             action = self.compute_motion()
             if isinstance(action, CFMotion):
                 # if action != Controller.DO_NOTHING_CMD:
@@ -84,6 +97,6 @@ class Controller:
 
             else:
                 pass
-            
+
             # rospy.spinOnce()
             rate.sleep()
