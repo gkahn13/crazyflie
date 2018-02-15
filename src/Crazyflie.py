@@ -159,7 +159,12 @@ class Crazyflie:
         print("ALT: %.3f" % self.alt)
         if self.accept_commands:
             self.update_alt(msg)
-            self.set_motion(msg.vx, msg.vy, msg.yaw, self.alt)
+            # switching between optical flow and roll pitch motion
+            if msg.is_flow_motion:
+                self.set_flow_motion(msg.x, msg.y, msg.yaw, self.alt)
+            else:
+                self.set_rp_motion(msg.x, msg.y, msg.yaw, self.alt)
+
         else:
             print("Not Accepting Motion Commands -- but one was sent!")
 
@@ -167,7 +172,7 @@ class Crazyflie:
         
         #what exactly does this do?
         #motion.alt = self.data.alt * 100 if self.data.alt > ALT_TOLERANCE else 0
-        self.alt += msg.alt_change
+        self.alt += msg.dz
         if self.alt < 0:
             self.alt = 0
         elif self.alt > MAX_ALT:
@@ -190,8 +195,11 @@ class Crazyflie:
 
     ## COMMANDS ##
 
-    def set_motion(self, vx, vy, yaw, alt):
+    def set_flow_motion(self, vx, vy, yaw, alt):
         self.cf.commander.send_hover_setpoint(vx, vy, yaw, alt)
+
+    def set_rp_motion(self, roll_a, pitch_a, yaw_r, alt):
+        self.cf.commander.send_zdistance_setpoint(roll_a, pitch_a, yaw_r, alt)
 
     def cmd_estop(self):
         print("---- Crazyflie %d Emergency Stopping ----" % self._id)

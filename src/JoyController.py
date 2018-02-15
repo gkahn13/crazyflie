@@ -21,10 +21,15 @@ ROLL_AXIS = 2 #left 1
 PITCH_AXIS = 3 #up 1
 YAW_AXIS = 0 #left 1
 
+#RP motion
 THROTTLE_SCALE = 0.1
 ROLL_SCALE = 0.5
 PITCH_SCALE = 0.5
 YAW_SCALE = -120
+
+#standard motion
+VX_SCALE = 0.5
+VY_SCALE = 0.5
 
 TAKEOFF_CHANNEL = 7 #RT
 ESTOP_CHANNEL = 2 #B
@@ -39,12 +44,14 @@ ALT_TOLERANCE = 0.08
 
 class JoyController(Controller):
 
-    def __init__(self, ID, joystick_topic):
+    def __init__(self, ID, joystick_topic, flow_motion=True):
         Controller.__init__(self, ID)
         self.joy_sub = rospy.Subscriber(joystick_topic, Joy, self.joy_cb)
         self.curr_joy = None
 
         self.cmd = -1 # -1 : NONE
+
+        self.is_flow_motion = flow_motion
 
     #Override
     def compute_motion(self):
@@ -85,21 +92,31 @@ class JoyController(Controller):
 
             else:
                 motion.alt_change = 0 '''
-            motion.vy = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
-            motion.vx = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
+
+            motion.is_flow_motion = self.is_flow_motion
+                # computing regular vx, vy, yaw, alt motion
+
+            if self.is_flow_motion:
+                motion.y = self.curr_joy.axes[ROLL_AXIS] * VY_SCALE
+                motion.x = self.curr_joy.axes[PITCH_AXIS] * VX_SCALE
+            else:
+                motion.y = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
+                motion.x = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
+
+            #common
             motion.yaw = self.curr_joy.axes[YAW_AXIS] * YAW_SCALE
 
-            
-            print(self.curr_joy.axes)
-            motion.alt_change= self.curr_joy.axes[THROTTLE_AXIS]* THROTTLE_SCALE
-            print("ALT CHANGE: %.3f" % motion.alt_change)
+                
+            # print(self.curr_joy.axes)
+            motion.dz = self.curr_joy.axes[THROTTLE_AXIS]* THROTTLE_SCALE
+            # print("ALT CHANGE: %.3f" % motion.dz)
 
-            #what is self.alt and where is it used??
-            #self.alt = motion.alt_change
+                #what is self.alt and where is it used??
+                #self.alt = motion.alt_change
 
-            # motion.vx = self.curr_joy.axes[3] * 0.1
-            # motion.vy = self.curr_joy.axes[4] * 0.1
-            # motion.yaw = self.curr_joy.axes[6] * 0.1
+                # motion.vx = self.curr_joy.axes[3] * 0.1
+                # motion.vy = self.curr_joy.axes[4] * 0.1
+                # motion.yaw = self.curr_joy.axes[6] * 0.1
             
         return motion
     
