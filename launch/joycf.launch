@@ -2,6 +2,7 @@
     <arg name="id" default="0"/>
     <arg name="uri" default="radio://0/80/250K"/>
     <arg name="use_flow" default="True"/>
+    <arg name="joy_topic" default="/joy"/>
 
     <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
 

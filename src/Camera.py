@@ -39,8 +39,8 @@ class Camera:
         try: 
             image_rate = rospy.Rate(10)
             cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 320)
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 240)
+            cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 96)
+            cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 72)
             while not rospy.is_shutdown():
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)

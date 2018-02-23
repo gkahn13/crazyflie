@@ -108,7 +108,7 @@ class JoyController(Controller):
 
                 
             # print(self.curr_joy.axes)
-            motion.dz = self.curr_joy.axes[THROTTLE_AXIS]* THROTTLE_SCALE
+            motion.dz = self.curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             # print("ALT CHANGE: %.3f" % motion.dz)
 
                 #what is self.alt and where is it used??
