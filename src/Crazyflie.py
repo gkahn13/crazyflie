@@ -36,7 +36,7 @@ cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
 class Crazyflie:
 
     # ID is for human readability
-    def __init__(self, cf_id, radio_uri):
+    def __init__(self, cf_id, radio_uri, data_only=True):
         self._id = cf_id
         self._uri = radio_uri
 
@@ -47,6 +47,7 @@ class Crazyflie:
         self.cf_active = False
 
         self.accept_commands = False
+        self.data_only = data_only
 
         self.data = None
         self.alt = 0
@@ -82,9 +83,9 @@ class Crazyflie:
 
         self.data_pub = rospy.Publisher('cf/%d/data'%self._id, CFData, queue_size=10)
         # self.image_pub = rospy.Publisher('cf/%d/image'%self._id, Image, queue_size=10)
-
-        self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
-        self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
+        if not self.data_only:
+            self.cmd_sub = rospy.Subscriber('cf/%d/command'%self._id, CFCommand, self.command_cb)
+            self.motion_sub = rospy.Subscriber('cf/%d/motion'%self._id, CFMotion, self.motion_cb)
 
     def signal_handler(self, sig, frame):
         if self.cf_active:
