@@ -44,15 +44,18 @@ class Controller:
 
         self.cmd_pub = rospy.Publisher('cf/%d/command'% self.id, CFCommand, queue_size=10)
         self.motion_pub = rospy.Publisher('cf/%d/motion'% self.id, CFMotion, queue_size=10)
-        self.coll_pub = rospy.Publisher('cf/%d/coll'% self.id, CFCollision, queue_size=10)
+        self.coll_pub = rospy.Publisher('cf/%d/coll'% self.id, Bool, queue_size=10)
 
     def compute_motion(self):
         print("Doing nothing -- ")
         return None
 
     def observedCollision(self):
+        if not self.data:
+            return False
         xy_mag = math.sqrt(self.data.accel_x ** 2 + self.data.accel_y ** 2)
         return xy_mag > self.COLLISION_THRESH
+
 
 
     ## CALLBACKS ## 
@@ -79,23 +82,19 @@ class Controller:
     def run(self):
         rate = rospy.Rate(10) # 10Hz
         while not rospy.is_shutdown():
-            if self.observedCollision():
-                self.coll_pub.publish(True)
-            else:
-                self.coll_pub.publish(False)
+            action = self.compute_motion()
 
             if self.data and self.observedCollision():
                 print("-- COLLISION : E-stopping --")
                 action = CFCommand()
                 action.cmd = CFCommand.ESTOP
                 self.cmd_pub.publish(action)
-
+                self.coll_pub.publish(True)
                 #sleep for 2 seconds
                 rospy.Rate(1.0/2).sleep()
                 print("Back Online")
 
 
-            action = self.compute_motion()
             if isinstance(action, CFMotion):
                 # if action != Controller.DO_NOTHING_CMD:
                 self.motion_pub.publish(action)
