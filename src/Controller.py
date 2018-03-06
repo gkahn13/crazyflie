@@ -93,6 +93,8 @@ class Controller:
                 #sleep for 2 seconds
                 rospy.Rate(1.0/2).sleep()
                 print("Back Online")
+            else:
+                self.coll_pub.publish(False)
 
 
             if isinstance(action, CFMotion):
