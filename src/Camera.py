@@ -13,7 +13,7 @@ from crazyflie.msg import CFData
 # from crazyflie.msg import CFImage
 from crazyflie.msg import CFCommand
 from crazyflie.msg import CFMotion
-
+import time
 
 
 class Camera:
@@ -37,10 +37,10 @@ class Camera:
     ## THREADS ##
     def run(self):
         try: 
-            image_rate = rospy.Rate(10)
+            #image_rate = rospy.Rate(10)
             cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 96)
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 72)
+            cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 192)
+            cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 144)
             while not rospy.is_shutdown():
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -51,7 +51,8 @@ class Camera:
                 cv2.imshow('frame', gray)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
-                image_rate.sleep()
+                #image_rate.sleep()
+                #time.sleep(1)
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:

@@ -44,9 +44,14 @@ ALT_TOLERANCE = 0.08
 
 class JoyController(Controller):
 
-    def __init__(self, ID, joystick_topic, flow_motion=True):
+    def __init__(self, ID, use_joy, joystick_topic, flow_motion=True):
         Controller.__init__(self, ID)
-        self.joy_sub = rospy.Subscriber(joystick_topic, Joy, self.joy_cb)
+        self.use_joy = use_joy
+
+        if self.use_joy:
+            self.joy_sub = rospy.Subscriber(joystick_topic, Joy, self.joy_cb)
+        else:
+            print("------ JOYSTICK NOT BEING USED BY CONTROLLER NODE ------")
         self.curr_joy = None
 
         self.cmd = -1 # -1 : NONE
@@ -57,6 +62,10 @@ class JoyController(Controller):
     def compute_motion(self):
         #pulls latest joystick data
         #print("Computing Motion From Joystick")
+
+        if not self.use_joy:
+            # no motion input from controller
+            return None
 
         motion = None
 

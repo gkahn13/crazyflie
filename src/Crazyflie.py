@@ -36,7 +36,7 @@ cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
 class Crazyflie:
 
     # ID is for human readability
-    def __init__(self, cf_id, radio_uri, data_only=True):
+    def __init__(self, cf_id, radio_uri, data_only=False):
         self._id = cf_id
         self._uri = radio_uri
 
@@ -103,7 +103,7 @@ class Crazyflie:
         self.cf_active = True
 
         try:
-            self.log_data = LogConfig(name="Data", period_in_ms=100)
+            self.log_data = LogConfig(name="Data", period_in_ms=40)
             self.log_data.add_variable('acc.x', 'float')
             self.log_data.add_variable('acc.y', 'float')
             self.log_data.add_variable('acc.z', 'float')
@@ -232,7 +232,7 @@ class Crazyflie:
         #handles image reads
         # threading.Thread(target=self.image_thread).start()
 
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(25)
 
         rospy.spin()
 
