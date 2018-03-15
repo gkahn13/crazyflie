@@ -191,7 +191,7 @@ class Crazyflie:
         d.v_batt = float(data['pm.vbat'])
         d.alt = float(data['stateEstimate.z'])
         # d.alt = float(data['posEstimatorAlt.estimatedZ'])
-
+        # print(d.v_batt)
         self.data_pub.publish(d)
 
     ## COMMANDS ##

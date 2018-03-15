@@ -28,7 +28,7 @@ class Controller:
 
     DO_NOTHING_CMD = CFMotion()
 
-    COLLISION_THRESH = 0.25
+    COLLISION_THRESH = 0.3
 
 
     def __init__(self, ID):
