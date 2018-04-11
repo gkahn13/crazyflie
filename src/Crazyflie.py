@@ -103,7 +103,7 @@ class Crazyflie:
         self.cf_active = True
 
         try:
-            self.log_data = LogConfig(name="Data", period_in_ms=40)
+            self.log_data = LogConfig(name="Data", period_in_ms=10)
             self.log_data.add_variable('acc.x', 'float')
             self.log_data.add_variable('acc.y', 'float')
             self.log_data.add_variable('acc.z', 'float')

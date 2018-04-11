@@ -38,7 +38,7 @@ class Camera:
     def run(self):
         try: 
             #image_rate = rospy.Rate(10)
-            cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
+            cap = cv2.VideoCapture(0) # TODO: multiple vid captures in parallel
             cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 192)
             cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 144)
             while not rospy.is_shutdown():
