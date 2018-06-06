@@ -3,7 +3,7 @@
 import rospy
 import sys
 
-sys.path.append("/home/katiekang/catkin_ws/src/crazyflie/src")
+sys.path.append("/home/crazyflie/catkin_ws/src/crazyflie/src")
 
 from Controller import Controller
 

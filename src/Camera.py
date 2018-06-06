@@ -4,16 +4,16 @@ import rospy
 
 import cv_bridge
 from cv_bridge import CvBridge
-
 import cv2
 import rospy
-
+import numpy as np
 from sensor_msgs.msg import CompressedImage
 from crazyflie.msg import CFData
 # from crazyflie.msg import CFImage
 from crazyflie.msg import CFCommand
 from crazyflie.msg import CFMotion
 import time
+import matplotlib.pyplot as plt
 
 
 class Camera:
@@ -38,7 +38,7 @@ class Camera:
     def run(self):
         try: 
             #image_rate = rospy.Rate(10)
-            cap = cv2.VideoCapture(0) # TODO: multiple vid captures in parallel
+            cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
             cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 192)
             cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 144)
             while not rospy.is_shutdown():
@@ -47,10 +47,30 @@ class Camera:
                 self.image_pub.publish(self.bridge.cv2_to_compressed_imgmsg(gray))
 
                 # self.publish_image(gray)
+                # gray=np.array([[0 for i in range(100)] for j in range(100)])
+                # for i in range(len(gray)):
+                #     for j in range(len(gray[0])):
+                #         if gray[i][j] == 140:
+                #             gray[i][j] = 140
+                #         elif gray[i][j] == 139:
+                #             gray[i][j] = 100
+                #         elif gray[i][j] == 138:
+                #             gray[i][j]= 60
+                #         else:
+                #             gray[i][j] = 0
+                # plt.hist(gray.flatten(), 140)
+
+                # plt.show()
+                # plt.imshow(gray)
+                # plt.show()
+
 
                 cv2.imshow('frame', gray)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
+
+
+
                 #image_rate.sleep()
                 #time.sleep(1)
             cap.release()

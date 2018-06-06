@@ -58,6 +58,7 @@ add_message_files(
     CFData.msg
     CFMotion.msg
     CFCommand.msg
+    JoyStop.msg
 )
 ## Generate services in the 'srv' folder
 # add_service_files(

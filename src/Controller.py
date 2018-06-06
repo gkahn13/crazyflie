@@ -28,7 +28,7 @@ class Controller:
 
     DO_NOTHING_CMD = CFMotion()
 
-    COLLISION_THRESH = 1.0
+    COLLISION_THRESH = 0.5
 
 
     def __init__(self, ID):
@@ -54,6 +54,7 @@ class Controller:
         if not self.data:
             return False
         xy_mag = math.sqrt(self.data.accel_x ** 2 + self.data.accel_y ** 2)
+        print("-- COLLIDED --") if xy_mag > self.COLLISION_THRESH else None
         return xy_mag > self.COLLISION_THRESH
 
 
