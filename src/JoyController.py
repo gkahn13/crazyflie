@@ -1,8 +1,4 @@
 import rospy
-# import cv_bridge
-# from cv_bridge import CvBridge, CvBridgeError
-# import cv2
-
 
 from sensor_msgs.msg import Image
 from crazyflie.msg import CFData
@@ -45,6 +41,7 @@ ALT_TOLERANCE = 0.08
 class JoyController(Controller):
 
     def __init__(self, ID, use_joy, joystick_topic, flow_motion=True):
+    
         Controller.__init__(self, ID)
         self.use_joy = use_joy
 
@@ -56,13 +53,11 @@ class JoyController(Controller):
 
         self.cmd = -1 # -1 : NONE
 
-        self.is_flow_motion = flow_motion
+        self.is_flow_motion = True#flow_motion
 
     #Override
     def compute_motion(self):
         #pulls latest joystick data
-        #print("Computing Motion From Joystick")
-
         if not self.use_joy:
             # no motion input from controller
             return None
@@ -86,21 +81,6 @@ class JoyController(Controller):
         #repeat send at 10Hz
         elif self.curr_joy:
             motion = CFMotion()
-            #TODO: update range
-            '''if self.data:
-                motion.alt = self.data.alt * 100 if self.data.alt > ALT_TOLERANCE else 0
-                print("ALT: %.3f" % motion.alt)
-                print(self.curr_joy.axes)
-                motion.alt += self.curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
-                if motion.alt < 0:
-                    motion.alt = 0
-                elif motion.alt > MAX_ALT:
-                    motion.alt = MAX_ALT
-
-                self.alt = motion.alt
-
-            else:
-                motion.alt_change = 0 '''
 
             motion.is_flow_motion = self.is_flow_motion
                 # computing regular vx, vy, yaw, alt motion
@@ -119,13 +99,6 @@ class JoyController(Controller):
             # print(self.curr_joy.axes)
             motion.dz = self.curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             # print("ALT CHANGE: %.3f" % motion.dz)
-
-                #what is self.alt and where is it used??
-                #self.alt = motion.alt_change
-
-                # motion.vx = self.curr_joy.axes[3] * 0.1
-                # motion.vy = self.curr_joy.axes[4] * 0.1
-                # motion.yaw = self.curr_joy.axes[6] * 0.1
             
         return motion
     
@@ -165,17 +138,6 @@ class JoyController(Controller):
                 #takeoff
                 self.cmd = CFCommand.LAND
                 print("CALLING LAND")
-            '''
 
-        if self.curr_joy:
-            if msg.buttons[ESTOP_CHANNEL] and not self.curr_joy.buttons[ESTOP_CHANNEL]:
-                #takeoff
-                self.cmd = CFCommand.ESTOP
-            elif msg.axes[2] and not self.curr_joy.axes[2]:
-                #takeoff
-                self.cmd = CFCommand.TAKEOFF
-            elif msg.axes[5] and not self.curr_joy.axes[5]:
-                #takeoff
-                self.cmd = CFCommand.LAND'''
         self.dead_band(msg)
         self.curr_joy = msg

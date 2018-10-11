@@ -1,8 +1,5 @@
 import rospy
 import numpy as np
-# import cv_bridge
-# from cv_bridge import CvBridge, CvBridgeError
-
 from PIL import Image
 
 import io
@@ -51,11 +48,12 @@ class Controller:
         return None
 
     def observedCollision(self):
-        if not self.data:
-            return False
-        xy_mag = math.sqrt(self.data.accel_x ** 2 + self.data.accel_y ** 2)
-        print("-- COLLIDED --") if xy_mag > self.COLLISION_THRESH else None
-        return xy_mag > self.COLLISION_THRESH
+        # if not self.data:
+        #     return False
+        # xy_mag = math.sqrt(self.data.accel_x ** 2 + self.data.accel_y ** 2)
+        # print("-- COLLIDED --") if xy_mag > self.COLLISION_THRESH else None
+        # return xy_mag > self.COLLISION_THRESH
+        return False
 
 
 
@@ -66,14 +64,9 @@ class Controller:
         pil_arr = Image.open(pil_jpg).convert('L') #grayscale
 
         self.mat = np.array(pil_arr)
-
-        # self.mat = self.convert_to_cv(msg)
         pass
 
     def data_cb(self, msg):
-        # print("----------> Data CB: <--------")
-        # print(msg)
-        # print("------------------------------")
         self.data = msg
         pass
 

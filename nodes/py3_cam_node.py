@@ -16,7 +16,6 @@ if __name__ == '__main__':
     ID = int(rospy.get_param(id_param, '0'))
 
     path = os.path.join(os.getenv('HOME'), "catkin_ws", "src", "crazyflie", "nodes", "py2_cam_node.py")
-
     py2_cmd = "python2 %s %d" % (path, ID)
 
     p = subprocess.Popen(py2_cmd.split())

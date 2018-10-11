@@ -14,6 +14,7 @@ from crazyflie.msg import CFCommand
 from crazyflie.msg import CFMotion
 import time
 import matplotlib.pyplot as plt
+import os
 
 
 class Camera:
@@ -37,42 +38,25 @@ class Camera:
     ## THREADS ##
     def run(self):
         try: 
-            #image_rate = rospy.Rate(10)
-            cap = cv2.VideoCapture(1) # TODO: multiple vid captures in parallel
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_WIDTH, 192)
-            cap.set(cv2.cv.CV_CAP_PROP_FRAME_HEIGHT, 144)
+            cap = cv2.VideoCapture(0) # TODO: multiple vid captures in parallel
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 192)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 144)
+            # cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.8)
+            # cap.set(cv2.CAP_PROP_CONTRAST, 0.2)
+            # cap.set(cv2.CAP_PROP_EXPOSURE, 0.08)
+            # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
+            
             while not rospy.is_shutdown():
+                
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                #ret, gray = cap.read()
                 self.image_pub.publish(self.bridge.cv2_to_compressed_imgmsg(gray))
-
-                # self.publish_image(gray)
-                # gray=np.array([[0 for i in range(100)] for j in range(100)])
-                # for i in range(len(gray)):
-                #     for j in range(len(gray[0])):
-                #         if gray[i][j] == 140:
-                #             gray[i][j] = 140
-                #         elif gray[i][j] == 139:
-                #             gray[i][j] = 100
-                #         elif gray[i][j] == 138:
-                #             gray[i][j]= 60
-                #         else:
-                #             gray[i][j] = 0
-                # plt.hist(gray.flatten(), 140)
-
-                # plt.show()
-                # plt.imshow(gray)
-                # plt.show()
-
 
                 cv2.imshow('frame', gray)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     break
 
-
-
-                #image_rate.sleep()
-                #time.sleep(1)
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:

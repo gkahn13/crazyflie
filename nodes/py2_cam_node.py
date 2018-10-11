@@ -3,8 +3,8 @@
 import sys
 import rospy
 
-sys.path.append( "/home/crazyflie/catkin_ws/src/crazyflie/src")
-
+# sys.path.append( "$HOME/catkin_ws/src/crazyflie/src")
+import crazyflie
 from Camera import Camera
 
 import logging

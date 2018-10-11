@@ -6,7 +6,13 @@ This package allows for a swarm of Crazyflies to be controlled by a Ground Stati
 
 ## Installation
 --------------
-Right now there's nothing to install ;). These are just basic files, no pkg has actually been created or tested yet.
+1. Setup ROS Kinetic, and setup your ROS Workspace with catkin_ws in your ~/ path.
+2. Make sure to have OpenCV3 installed for python 2 (ROS works better with OpenCV in python 2).
+3. In python 3, you must pip install the cflib classes from this repository: https://github.com/bitcraze/crazyflie-lib-python. If you are on linux, make sure to also follow the "Setting udev permissions" section.
+3. Clone this repository to your ~/catkin_ws/src/
+4. cd ~/catkin_ws
+5. catkin_make
+6. source ~/catkin_ws/devel/setup.bash
 
 
 ## Functionality
@@ -55,5 +61,19 @@ Right now there's nothing to install ;). These are just basic files, no pkg has 
 ###### CFCommand
 * EMERGENCY-STOP = 0, LAND = 1, TAKEOFF = 2
 * int cmd
+
+
+## Launch Files and Scripts
+-------------
+#### Launch Files
+* cf.launch: Launches the cf\_node, the default controller node, and the camera
+* joy.launch: Launches the joystick and the joystick controller nodes.
+* joycf.launch: This is the main launch file to start the cf\_node, the joystick controller node, the joystick node, and the camera node.
+
+#### Scripts
+* figure8.py: Moves CF in a figure 8.
+* hover\_end\_bat.py: uses altitude and optical flow position control to hover until the battery dips below a certain voltage.
+* key_control.py: keyboard control of crazyflie (forward, back, left, right) example
+
 
 

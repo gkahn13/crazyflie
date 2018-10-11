@@ -158,6 +158,7 @@ class Crazyflie:
 
     def motion_cb(self, msg):
         print("ALT: %.3f" % self.alt)
+        print(msg)
         if self.accept_commands:
             self.update_alt(msg)
             # switching between optical flow and roll pitch motion

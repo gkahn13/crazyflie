@@ -3,7 +3,7 @@
 import rospy
 import sys
 
-sys.path.append("/home/crazyflie/catkin_ws/src/crazyflie/src")
+sys.path.append("/home/crazyflie2/catkin_ws/src/crazyflie/src")
 
 from JoyController import JoyController
 
