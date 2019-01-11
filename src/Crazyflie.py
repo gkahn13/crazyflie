@@ -51,6 +51,12 @@ class Crazyflie:
 
         self.data = None
         self.alt = 0
+        self.to_publish = None
+
+        self._rec_data = False
+        self._rec_data_stab = False
+        self._rec_data_kalman = False
+        self._rec_data_mag = False
 
         # self.bridge = CvBridge()
 
@@ -109,12 +115,42 @@ class Crazyflie:
             self.log_data.add_variable('acc.z', 'float')
             self.log_data.add_variable('pm.vbat', 'float')
             self.log_data.add_variable('stateEstimate.z', 'float')
+
+            self.log_data_stab = LogConfig(name="StabilizerData", period_in_ms=10)
+            self.log_data_stab.add_variable('stabilizer.yaw', 'float')
+            self.log_data_stab.add_variable('stabilizer.pitch', 'float')
+            self.log_data_stab.add_variable('stabilizer.roll', 'float')
+            # self.log_data.add_variable('kalman_states.vx', 'float')
+            # self.log_data.add_variable('kalman_states.vy', 'float')
+
+            self.log_data_kalman = LogConfig(name="KalmanData", period_in_ms=10)
+            self.log_data_kalman.add_variable('kalman_states.vx', 'float')
+            self.log_data_kalman.add_variable('kalman_states.vy', 'float')
+
+            self.log_data_mag = LogConfig(name="MagData", period_in_ms=10)
+            self.log_data_mag.add_variable('mag.x', 'float')
+            self.log_data_mag.add_variable('mag.y', 'float')
+            self.log_data_mag.add_variable('mag.z', 'float')
+            # self.log_data.add_variable('kalman_states.ox', 'float')
+            # self.log_data.add_variable('kalman_states.oy', 'float')
+            # self.log_data.add_variable('motion.deltaX', 'int16_t')
+            # self.log_data.add_variable('motion.deltaY', 'int16_t')
             self.cf.log.add_config(self.log_data)
+            self.cf.log.add_config(self.log_data_stab)
+            self.cf.log.add_config(self.log_data_kalman)
+            self.cf.log.add_config(self.log_data_mag)
+
             self.log_data.data_received_cb.add_callback(self.received_data)
+            self.log_data_stab.data_received_cb.add_callback(self.received_data)
+            self.log_data_kalman.data_received_cb.add_callback(self.received_data)
+            self.log_data_mag.data_received_cb.add_callback(self.received_data)
 
 
             #begins logging and publishing
             self.log_data.start()
+            self.log_data_stab.start()
+            self.log_data_kalman.start()
+            self.log_data_mag.start()
 
             print("Logging Setup Complete. Starting...")
         except KeyError as e:
@@ -182,18 +218,45 @@ class Crazyflie:
 
     def received_data(self, timestamp, data, logconf):
         # print("DATA RECEIVED")
-        # print(self.data)
-        self.data = data
-        d = CFData()
-        d.ID = self._id
-        d.accel_x = float(data['acc.x'])
-        d.accel_y = float(data['acc.y'])
-        d.accel_z = float(data['acc.z'])
-        d.v_batt = float(data['pm.vbat'])
-        d.alt = float(data['stateEstimate.z'])
+        if self.to_publish == None:
+            self.to_publish = CFData()
+            self.to_publish.ID = self._id
+
+        if logconf.name == 'Data':
+            self.data = data
+            self.to_publish.accel_x = float(data['acc.x'])
+            self.to_publish.accel_y = float(data['acc.y'])
+            self.to_publish.accel_z = float(data['acc.z'])
+            self.to_publish.v_batt = float(data['pm.vbat'])
+            self.to_publish.alt = float(data['stateEstimate.z'])
+            self._rec_data = True
+
+        elif logconf.name == 'StabilizerData':
+            self.to_publish.yaw = float(data['stabilizer.yaw'])
+            self.to_publish.pitch = float(data['stabilizer.pitch'])
+            self.to_publish.roll = float(data['stabilizer.roll'])
+            self._rec_data_stab = True
+        elif logconf.name == 'KalmanData':
+            self.to_publish.kalman_vx = float(data['kalman_states.vx'])
+            self.to_publish.kalman_vy = float(data['kalman_states.vy'])
+            self._rec_data_kalman = True
+        elif logconf.name == 'MagData':
+            self.to_publish.magx = float(data['mag.x'])
+            self.to_publish.magy = float(data['mag.y'])
+            self.to_publish.magz = float(data['mag.z'])
+            self._rec_data_mag = True
+               
+        if self._rec_data and self._rec_data_stab and self._rec_data_kalman and self._rec_data_mag: 
+            self.data_pub.publish(self.to_publish)
+            self.to_publish = None
+
+            self._rec_data = False
+            self._rec_data_stab = False
+            self._rec_data_kalman = False
+            self._rec_data_mag = False
+            # print("MAG:", data)
+
         # d.alt = float(data['posEstimatorAlt.estimatedZ'])
-        # print(d.v_batt)
-        self.data_pub.publish(d)
 
     ## COMMANDS ##
 

@@ -5,3 +5,14 @@ float32 accel_y
 float32 accel_z
 float32 v_batt
 float64 alt
+
+float32 yaw
+float32 pitch
+float32 roll
+
+float32 kalman_vx
+float32 kalman_vy
+
+float32 magx
+float32 magy
+float32 magz

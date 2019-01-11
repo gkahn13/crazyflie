@@ -47,7 +47,7 @@ class Camera:
             # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
             
             while not rospy.is_shutdown():
-                
+                #print("werfiuweruf")
                 ret, frame = cap.read()
                 gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
                 #ret, gray = cap.read()

@@ -19,9 +19,12 @@ YAW_AXIS = 0 #left 1
 
 #RP motion
 THROTTLE_SCALE = 0.1
-ROLL_SCALE = 0.5
-PITCH_SCALE = 0.5
+ROLL_SCALE = -25
+PITCH_SCALE = -25
 YAW_SCALE = -120
+
+ROLL_CLIP = abs(ROLL_SCALE) * 0.4
+PITCH_CLIP = abs(PITCH_SCALE) * 0.1
 
 #standard motion
 VX_SCALE = 0.5
@@ -53,7 +56,7 @@ class JoyController(Controller):
 
         self.cmd = -1 # -1 : NONE
 
-        self.is_flow_motion = True#flow_motion
+        self.is_flow_motion = flow_motion
 
     #Override
     def compute_motion(self):
@@ -89,8 +92,11 @@ class JoyController(Controller):
                 motion.y = self.curr_joy.axes[ROLL_AXIS] * VY_SCALE
                 motion.x = self.curr_joy.axes[PITCH_AXIS] * VX_SCALE
             else:
-                motion.y = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
-                motion.x = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
+                motion.x = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
+                motion.y = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
+
+            motion.x = motion.x if abs(motion.x) > ROLL_CLIP else 0
+            motion.y = motion.y if abs(motion.y) > PITCH_CLIP else 0
 
             #common
             motion.yaw = self.curr_joy.axes[YAW_AXIS] * YAW_SCALE
