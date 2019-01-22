@@ -8,7 +8,7 @@
 
     <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
 
-    <node name="joy_controller_node$(arg id)" pkg="crazyflie" type="joy_controller_node.py" output="screen">
+    <node name="joy_commander_node$(arg id)" pkg="crazyflie" type="joy_commander_node.py" output="screen">
         <param name="id" value="$(arg id)"/>
         <param name="joy_topic" value="$(arg joy_topic)"/>
         <param name="use_joy" value="$(arg use_joy)"/>

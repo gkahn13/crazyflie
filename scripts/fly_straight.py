@@ -59,8 +59,7 @@ if __name__ == '__main__':
             time.sleep(2)
 
             print('Fly forward')
-            mc.start_forward(velocity=1.5)
-
+            mc.start_forward(velocity=1.5) # 1.5
             time.sleep(2.0)
 
             print('Land')
