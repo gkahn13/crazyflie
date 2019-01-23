@@ -219,5 +219,5 @@ catkin_install_python(PROGRAMS nodes/py2_cam_node.py
 catkin_install_python(PROGRAMS nodes/controller_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-catkin_install_python(PROGRAMS nodes/joy_controller_node.py
-  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
+#catkin_install_python(PROGRAMS nodes/joy_controller_node.py
+#  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})

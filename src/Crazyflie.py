@@ -13,7 +13,7 @@ from crazyflie.msg import CFCommand, CFMotion
 
 class Crazyflie:
 
-    DEFAULT_HEIGHT = 0.6
+    DEFAULT_HEIGHT = 0.4 # 0.6
 
     def __init__(self, id, radio_uri):
         self._is_airborne = False
