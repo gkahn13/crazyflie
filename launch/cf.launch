@@ -1,5 +1,6 @@
 <launch>
     <arg name="id" default="0"/>
+    <arg name="cam_id" default="0"/>
     <arg name="uri" default="radio://0/80/250K"/>
     <arg name="data_only" default="False"/>
 
@@ -16,6 +17,7 @@
 
     <node name="cam_node$(arg id)" pkg="crazyflie" type="py3_cam_node.py" output="screen">
         <param name="id" value="$(arg id)"/>
+        <param name="cam_id" value="$(arg cam_id)"/>
     </node>
 
 </launch>

@@ -21,9 +21,10 @@ class Camera:
 
     # DO_NOTHING_CMD = CFMotion()
 
-    def __init__(self, ID):
+    def __init__(self, ID, cam_id):
         self.id = ID
-
+        self.cam_id = cam_id
+        
         self.bridge = CvBridge()
 
         self.mat = None
@@ -38,7 +39,7 @@ class Camera:
     ## THREADS ##
     def run(self):
         try: 
-            cap = cv2.VideoCapture(0) # TODO: multiple vid captures in parallel
+            cap = cv2.VideoCapture(self.cam_id) # TODO: multiple vid captures in parallel
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 192)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 144)
             # cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.8)
