@@ -4,7 +4,7 @@ from PIL import Image
 
 import io
 
-import cv2
+# import cv2
 import math
 
 from sensor_msgs.msg import CompressedImage

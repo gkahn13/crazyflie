@@ -6,6 +6,7 @@
     <arg name="joy_topic" default="/joy"/>
     <arg name="data_only" default="False"/>
     <arg name="use_joy" default="True"/>
+    <arg name="is_raw" default="False"/>
 
     <node name="joystick" pkg="joy" type="joy_node" output="screen"/>
 
@@ -25,6 +26,8 @@
     <node name="cam_node$(arg id)" pkg="crazyflie" type="py3_cam_node.py" output="screen">
         <param name="id" value="$(arg id)"/>
         <param name="cam_id" value="$(arg cam_id)"/>
+        <param name="is_raw" value="$(arg is_raw)"/>
     </node>
+
 
 </launch>

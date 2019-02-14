@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 
 import rospy
-
+import os
 import sys
 
-sys.path.append( "/home/crazyflie2/catkin_ws/src/crazyflie/src")
+sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
 
+import Crazyflie
 from Crazyflie import Crazyflie
 
 import logging

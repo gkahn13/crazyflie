@@ -95,8 +95,8 @@ class JoyController(Controller):
                 motion.x = self.curr_joy.axes[ROLL_AXIS] * ROLL_SCALE
                 motion.y = self.curr_joy.axes[PITCH_AXIS] * PITCH_SCALE
 
-            motion.x = motion.x if abs(motion.x) > ROLL_CLIP else 0
-            motion.y = motion.y if abs(motion.y) > PITCH_CLIP else 0
+                motion.x = motion.x if abs(motion.x) > ROLL_CLIP else 0
+                motion.y = motion.y if abs(motion.y) > PITCH_CLIP else 0
 
             #common
             motion.yaw = self.curr_joy.axes[YAW_AXIS] * YAW_SCALE

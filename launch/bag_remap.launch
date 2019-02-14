@@ -1,0 +1,11 @@
+<launch>
+    <arg name="bag"/>
+    <arg name="out_topic" default="/cf/0/image_raw"/>
+
+    <node pkg="rosbag" type="play" name="player" output="screen" args="$(arg bag)"/>
+
+    <node pkg="topic_tools" type="relay" name="relay" output="screen" args="/cf/0/image /cf/0/image/compressed"/>
+
+    <node name="republish" type="republish" pkg="image_transport" output="screen" args="compressed in:=/cf/0/image raw out:=$(arg out_topic)" />
+
+</launch>

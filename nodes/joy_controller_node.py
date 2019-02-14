@@ -2,8 +2,9 @@
 
 import rospy
 import sys
+import os
 
-sys.path.append("/home/crazyflie2/catkin_ws/src/crazyflie/src")
+sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
 
 from JoyController import JoyController
 
