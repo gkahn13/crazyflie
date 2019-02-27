@@ -44,21 +44,21 @@ if __name__ == '__main__':
 
         while(True):
 
-        for _ in range(20):
-            cf.commander.send_hover_setpoint(0, 0, 0, 0.4)
-            time.sleep(0.1)
+            for _ in range(20):
+                cf.commander.send_hover_setpoint(0, 0, 0, 0.4)
+                time.sleep(0.1)
 
-        for _ in range(50):
-            cf.commander.send_hover_setpoint(0.5, 0, 36 * 2, 0.4)
-            time.sleep(0.1)
+            for _ in range(50):
+                cf.commander.send_hover_setpoint(0.5, 0, 36 * 2, 0.4)
+                time.sleep(0.1)
 
-        for _ in range(50):
-            cf.commander.send_hover_setpoint(0.5, 0, -36 * 2, 0.4)
-            time.sleep(0.1)
+            for _ in range(50):
+                cf.commander.send_hover_setpoint(0.5, 0, -36 * 2, 0.4)
+                time.sleep(0.1)
 
-        for _ in range(20):
-            cf.commander.send_hover_setpoint(0, 0, 0, 0.4)
-            time.sleep(0.1)
+            for _ in range(20):
+                cf.commander.send_hover_setpoint(0, 0, 0, 0.4)
+                time.sleep(0.1)
 
         print("**** Crazyflie Landing ****")
 

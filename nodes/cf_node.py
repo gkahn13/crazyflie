@@ -25,6 +25,8 @@ if __name__ == '__main__':
     id_param = rospy.search_param('id')
     uri_param = rospy.search_param('uri')
     data_only_param = rospy.search_param('data_only')
+    motion_param = rospy.search_param('motion')
+
     if not id_param or not uri_param: 
         print("No ID or URI Specified! Abort.")
         sys.exit(0)
@@ -32,6 +34,7 @@ if __name__ == '__main__':
     ID = int(rospy.get_param(id_param, '0'))
     URI = rospy.get_param(uri_param, DEFAULT_URI)
     data_only = bool(rospy.get_param(data_only_param, DEFAULT_URI))
+    motion = rospy.get_param(motion_param, 'None')
 
  #    if not rospy.has_param('id') or not rospy.has_param('uri'):
  #        print("No ID or URI Specified! Abort.")
@@ -40,5 +43,5 @@ if __name__ == '__main__':
  #    ID = int(rospy.get_param('id', '0'))
  #    URI = rospy.get_param('uri', DEFAULT_URI)
 
-    cf = Crazyflie(ID, URI, data_only)
+    cf = Crazyflie(ID, URI, data_only, motion)
     cf.run()
