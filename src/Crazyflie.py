@@ -1,6 +1,8 @@
 import rospy
 import numpy as np
 
+import tf2_ros as tf
+
 from crazyflie.msg import CFData
 # from crazyflie.msg import CFImage
 # from sensor_msgs.msg import Image
@@ -12,8 +14,11 @@ from geometry_msgs.msg import Quaternion
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import TwistStamped
 from geometry_msgs.msg import Vector3
+from geometry_msgs.msg import TransformStamped
 from math import cos, sin
 import math
+
+from struct import pack, unpack
 
 import logging
 # Only output errors from the logging framework
@@ -42,16 +47,18 @@ cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
 
 # exp averaging timer
 class FreqTimer:
-    def __init__(self, name, alpha=0.95):
+    def __init__(self, name, alpha=0.99):
         self.name = name
         self.counter = 0
         self.time_start = time.time()
         self.time_last = -1
-        self.freq = 100
+        self.freq = 0
         self.alpha = alpha
 
     def new_msg(self):
-        if self.counter > 0:
+        if self.counter == 1:
+            self.freq = 1/(time.time() - self.time_last) # quick set
+        elif self.counter > 0:
             new_freq = 1/(time.time() - self.time_last)
             self.freq = self.alpha*self.freq + (1-self.alpha)*new_freq
         self.counter+=1
@@ -70,8 +77,8 @@ class Crazyflie:
 
         self.stop_sig = False
 
-        self.data_freq_timer = FreqTimer('DATA')
-        self.data_gyro_freq_timer = FreqTimer('GYRODATA')
+        self.data_imu_freq_timer = FreqTimer('DATA')
+        # self.data_gyro_freq_timer = FreqTimer('GYRODATA')
         self.data_stab_freq_timer = FreqTimer('STABDATA')
         self.data_kalman_freq_timer = FreqTimer('KALMDATA')
 
@@ -87,15 +94,13 @@ class Crazyflie:
         self.alt = 0
         self.to_publish = None
 
-        self._rec_data = False
-        self._rec_data_gyro = False
+        self._rec_data_imu = False
+        # self._rec_data_gyro = False
         self._rec_data_stab = False
         self._rec_data_kalman = False
-        self._rec_data_pos = False
-        self._rec_data_mag = False
+        # self._rec_data_pos = False
+        # self._rec_data_mag = False
 
-        self._imu_rec_acc = False
-        self._imu_rec_gyro = False
 
         self._lock = threading.Lock()
 
@@ -125,8 +130,27 @@ class Crazyflie:
         #     print("Unable to connect to CF %d at URI %s" % (self._id, self._uri))
         #     self.scf = None
         #     self.cf = None
-        
 
+        # STATIC PUBLISHERS
+        self.stat_tf_br = tf.StaticTransformBroadcaster()
+        sts = TransformStamped()
+        sts.header.stamp = rospy.Time.now()
+        sts.header.frame_id = "world"
+        sts.child_frame_id = "map"
+
+        sts.transform.translation.x = 0
+        sts.transform.translation.y = 0
+        sts.transform.translation.z = 0
+
+        sts.transform.rotation.x = 0
+        sts.transform.rotation.y = 0
+        sts.transform.rotation.z = 0
+        sts.transform.rotation.w = 1
+
+        self.stat_tf_br.sendTransform(sts)
+
+        # NON STATIC PUBLISHERS
+        self.tf_br = tf.TransformBroadcaster()
         self.data_pub = rospy.Publisher('cf/%d/data'%self._id, CFData, queue_size=10)
         self.imu_pub = rospy.Publisher('cf/%d/imu'%self._id, Imu, queue_size=10)
         self.pose_pub = rospy.Publisher('cf/%d/pose'%self._id, PoseStamped, queue_size=10)
@@ -149,9 +173,9 @@ class Crazyflie:
     def quaternion_from_euler(self, roll, pitch, yaw, deg=False):
         # Abbreviations for the various angular functions
         if deg:
-            yaw = yaw * 2*math.pi / 180.0
-            pitch = pitch * 2*math.pi / 180.0
-            roll = roll * 2*math.pi / 180.0
+            yaw = yaw * math.pi / 180.0
+            pitch = pitch * math.pi / 180.0
+            roll = roll * math.pi / 180.0
 
         cy = cos(yaw * 0.5)
         sy = sin(yaw * 0.5)
@@ -175,75 +199,70 @@ class Crazyflie:
 
         self.cf_active = True
 
+        self.log_imu_data = LogConfig(name="ImuData", period_in_ms=25)
+        self.log_imu_data.add_variable('acc.x', 'FP16')
+        self.log_imu_data.add_variable('acc.y', 'FP16')
+        self.log_imu_data.add_variable('acc.z', 'FP16')
+        self.log_imu_data.add_variable('gyro.x', 'FP16')
+        self.log_imu_data.add_variable('gyro.y', 'FP16')
+        self.log_imu_data.add_variable('gyro.z', 'FP16')
+
         try:
-            self.log_data = LogConfig(name="Data", period_in_ms=10)
-            self.log_data.add_variable('acc.x', 'float')
-            self.log_data.add_variable('acc.y', 'float')
-            self.log_data.add_variable('acc.z', 'float')
-            self.log_data.add_variable('pm.vbat', 'float')
-
-
-            self.log_gyro_data = LogConfig(name="GyroData", period_in_ms=10)
-            self.log_gyro_data.add_variable('gyro.x', 'float')
-            self.log_gyro_data.add_variable('gyro.y', 'float')
-            self.log_gyro_data.add_variable('gyro.z', 'float')
-
-            self.log_data_stab = LogConfig(name="StabilizerData", period_in_ms=10)
-            self.log_data_stab.add_variable('stabilizer.yaw', 'float')
-            self.log_data_stab.add_variable('stabilizer.pitch', 'float')
-            self.log_data_stab.add_variable('stabilizer.roll', 'float')
-            # self.log_data.add_variable('kalman_states.vx', 'float')
-            # self.log_data.add_variable('kalman_states.vy', 'float')
-
-            self.log_data_kalman = LogConfig(name="KalmanData", period_in_ms=10)
-            self.log_data_kalman.add_variable('kalman_states.vx', 'float')
-            self.log_data_kalman.add_variable('kalman_states.vy', 'float')
-            self.log_data_kalman.add_variable('stateEstimate.x', 'float')
-            self.log_data_kalman.add_variable('stateEstimate.y', 'float')
-            self.log_data_kalman.add_variable('stateEstimate.z', 'float')
-
-            # self.log_data_pos = LogConfig(name="PosData", period_in_ms=10)
-            # self.log_data_pos.add_variable('stateEstimate.x', 'float')
-            # self.log_data_pos.add_variable('stateEstimate.y', 'float')
-            # self.log_data_pos.add_variable('stateEstimate.z', 'float')
-
-            # self.log_data_mag = LogConfig(name="MagData", period_in_ms=10)
-            # self.log_data_mag.add_variable('mag.x', 'float')
-            # self.log_data_mag.add_variable('mag.y', 'float')
-            # self.log_data_mag.add_variable('mag.z', 'float')
-            # self.log_data.add_variable('kalman_states.ox', 'float')
-            # self.log_data.add_variable('kalman_states.oy', 'float')
-            # self.log_data.add_variable('motion.deltaX', 'int16_t')
-            # self.log_data.add_variable('motion.deltaY', 'int16_t')
-            self.cf.log.add_config(self.log_data)
-            self.cf.log.add_config(self.log_gyro_data)
-            self.cf.log.add_config(self.log_data_stab)
-            self.cf.log.add_config(self.log_data_kalman)
-            # self.cf.log.add_config(self.log_data_pos)
-            # self.cf.log.add_config(self.log_data_mag)
-
-            self.log_data.data_received_cb.add_callback(self.received_data)
-            self.log_gyro_data.data_received_cb.add_callback(self.received_data)
-            self.log_data_stab.data_received_cb.add_callback(self.received_data)
-            self.log_data_kalman.data_received_cb.add_callback(self.received_data)
-            # self.log_data_pos.data_received_cb.add_callback(self.received_data)
-            # self.log_data_mag.data_received_cb.add_callback(self.received_data)
-
-
-            #begins logging and publishing
-            self.log_data.start()
-            self.log_gyro_data.start()
-            self.log_data_stab.start()
-            self.log_data_kalman.start()
-            # self.log_data_pos.start()
-            # self.log_data_mag.start()
-
-            print("Logging Setup Complete. Starting...")
+            self.cf.log.add_config(self.log_imu_data)
+            self.log_imu_data.data_received_cb.add_callback(self.received_data)
+            self.log_imu_data.start()
         except KeyError as e:
             print('Could not start log configuration,'
                   '{} not found in TOC'.format(str(e)))
-        except AttributeError:
-            print('Could not add log config, bad configuration.')
+        except AttributeError as e:
+            print('Could not add ImuData log config, bad configuration: %s' % str(e))
+        
+        self.log_kalman_data = LogConfig(name='KalmanData', period_in_ms=25)
+        
+        self.log_kalman_data.add_variable('kalman_states.vx', 'FP16')
+        self.log_kalman_data.add_variable('kalman_states.vy', 'FP16')
+        self.log_kalman_data.add_variable('stateEstimate.x', 'FP16')
+        self.log_kalman_data.add_variable('stateEstimate.y', 'FP16')
+        self.log_kalman_data.add_variable('stateEstimate.z', 'FP16')
+    
+        try:
+            self.cf.log.add_config(self.log_kalman_data)
+            self.log_kalman_data.data_received_cb.add_callback(self.received_data)
+            self.log_kalman_data.start()
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError as e:
+            print('Could not add KalmanData log config, bad configuration: %s' % str(e))
+
+        self.log_stab_data = LogConfig(name='StabilizerData', period_in_ms=25)
+        
+        self.log_stab_data.add_variable('stabilizer.pitch', 'FP16')
+        self.log_stab_data.add_variable('stabilizer.roll', 'FP16')
+        self.log_stab_data.add_variable('stabilizer.yaw', 'FP16')
+        self.log_stab_data.add_variable('pm.vbat', 'FP16')
+    
+        try:
+            self.cf.log.add_config(self.log_stab_data)
+            self.log_stab_data.data_received_cb.add_callback(self.received_data)
+            self.log_stab_data.start()
+        except KeyError as e:
+            print('Could not start log configuration,'
+                  '{} not found in TOC'.format(str(e)))
+        except AttributeError as e:
+            print('Could not add StabilizerData log config, bad configuration: %s' % str(e))
+        
+
+
+        #     # self.log_data_mag = LogConfig(name="MagData", period_in_ms=10)
+        #     # self.log_data_mag.add_variable('mag.x', 'float')
+        #     # self.log_data_mag.add_variable('mag.y', 'float')
+        #     # self.log_data_mag.add_variable('mag.z', 'float')
+
+        #     # self.log_data.add_variable('kalman_states.ox', 'float')
+        #     # self.log_data.add_variable('kalman_states.oy', 'float')
+        #     # self.log_data.add_variable('motion.deltaX', 'int16_t')
+        #     # self.log_data.add_variable('motion.deltaY', 'int16_t')
 
 
     def disconnected(self, uri):
@@ -279,7 +298,7 @@ class Crazyflie:
             print("Not Accepting Commands -- but one was sent!")
 
     def motion_cb(self, msg):
-        print("ALT: %.3f" % self.alt)
+        # print("ALT: %.3f" % self.alt)
         # print(msg)
         if self.accept_commands:
             self.update_alt(msg)
@@ -302,111 +321,141 @@ class Crazyflie:
         elif self.alt > MAX_ALT:
             self.alt = MAX_ALT
 
+    def f32_from_f16(self, float16):
+        
+        s = int((float16 >> 15) & 0x00000001)    # sign
+        e = int((float16 >> 10) & 0x0000001f)    # exponent
+        f = int(float16 & 0x000003ff)            # fraction
+
+        if e == 0:
+            if f == 0:
+                return int(s << 31)
+            else:
+                while not (f & 0x00000400):
+                    f = f << 1
+                    e -= 1
+                e += 1
+                f &= ~0x00000400
+                #print(s,e,f)
+        elif e == 31:
+            if f == 0:
+                return int((s << 31) | 0x7f800000)
+            else:
+                return int((s << 31) | 0x7f800000 | (f << 13))
+
+        e = e + (127 -15)
+        f = f << 13
+        
+        i = int((s << 31) | (e << 23) | f)
+
+        tmp = pack('I',i)
+        return unpack('f', tmp)[0]
+
+
     def received_data(self, timestamp, data, logconf):
         # print("DATA RECEIVED")
+
         if self.to_publish == None:
             self.to_publish = CFData()
             self.to_publish.ID = self._id
 
-
-        self._lock.acquire()
-
         try:
-            if logconf.name == 'Data':
+            if logconf.name == 'ImuData':
                 self.data = data
-                self.to_publish.accel_x = float(data['acc.x'])
-                self.to_publish.accel_y = float(data['acc.y'])
-                self.to_publish.accel_z = float(data['acc.z'])
-                self.to_publish.v_batt = float(data['pm.vbat'])
+                self.to_publish.accel_x = self.f32_from_f16(data['acc.x'])
+                self.to_publish.accel_y = self.f32_from_f16(data['acc.y'])
+                self.to_publish.accel_z = self.f32_from_f16(data['acc.z'])
+                self.to_publish.gyro_x = self.f32_from_f16(data['gyro.x'])
+                self.to_publish.gyro_y = self.f32_from_f16(data['gyro.y'])
+                self.to_publish.gyro_z = self.f32_from_f16(data['gyro.z'])
+                # print(data)
                 # print("DATA")
-                self.data_freq_timer.new_msg()
-                # imu msg
-                self._imu_rec_acc = True
+                self.data_imu_freq_timer.new_msg()
 
-                self._rec_data = True
-            elif logconf.name == 'GyroData':
-                self.to_publish.gyro_x = float(data['gyro.x'])
-                self.to_publish.gyro_y = float(data['gyro.y'])
-                self.to_publish.gyro_z = float(data['gyro.z'])
-                # print("GYRODATA")
-                self.data_gyro_freq_timer.new_msg()
-                # imu msg
-                self._imu_rec_gyro = True
-
-                self._rec_data_gyro = True
+                self._rec_data_imu = True
 
             elif logconf.name == 'StabilizerData':
-                self.to_publish.yaw = float(data['stabilizer.yaw'])
-                self.to_publish.pitch = float(data['stabilizer.pitch'])
-                self.to_publish.roll = float(data['stabilizer.roll'])
+                self.to_publish.yaw = self.f32_from_f16(data['stabilizer.yaw'])
+                self.to_publish.pitch = self.f32_from_f16(data['stabilizer.pitch'])
+                self.to_publish.roll = self.f32_from_f16(data['stabilizer.roll'])
+                self.to_publish.v_batt = self.f32_from_f16(data['pm.vbat'])
                 self._rec_data_stab = True
                 # print("STABDATA")
                 self.data_stab_freq_timer.new_msg()
+
             elif logconf.name == 'KalmanData':
-                self.to_publish.kalman_vx = float(data['kalman_states.vx'])
-                self.to_publish.kalman_vy = float(data['kalman_states.vy'])
-                self.to_publish.pos_x = float(data['stateEstimate.x'])
-                self.to_publish.pos_y = float(data['stateEstimate.y'])
-                self.to_publish.alt = float(data['stateEstimate.z'])
+                self.to_publish.kalman_vx = self.f32_from_f16(data['kalman_states.vx'])
+                self.to_publish.kalman_vy = self.f32_from_f16(data['kalman_states.vy'])
+                self.to_publish.pos_x = self.f32_from_f16(data['stateEstimate.x'])
+                self.to_publish.pos_y = self.f32_from_f16(data['stateEstimate.y'])
+                self.to_publish.alt = self.f32_from_f16(data['stateEstimate.z'])
                 self._rec_data_kalman = True
                 # print("KALMDATA")
                 self.data_kalman_freq_timer.new_msg()
 
-            elif logconf.name == 'MagData':
-                self.to_publish.magx = float(data['mag.x'])
-                self.to_publish.magy = float(data['mag.y'])
-                self.to_publish.magz = float(data['mag.z'])
-                self._rec_data_mag = True
-                # print("MAGDATA")
-                   
-            if self._rec_data and self._rec_data_gyro and self._rec_data_stab and self._rec_data_kalman: # and self._rec_data_mag: 
-                self.data_pub.publish(self.to_publish)
-                # self.to_publish = None
+            # elif logconf.name == 'MagData':
+            #     self.to_publish.magx = float(data['mag.x'])
+            #     self.to_publish.magy = float(data['mag.y'])
+            #     self.to_publish.magz = float(data['mag.z'])
+            #     self._rec_data_mag = True
+            #     # print("MAGDATA")
+            
 
-                ### THIS IS ALL IN ROS COORDINATES (X: right, Y: forward, Z: up)
-                pose_msg = PoseStamped()
-                pose_msg.header.stamp = rospy.Time.now()
-                pose_msg.pose.position = Vector3(-self.to_publish.pos_y, self.to_publish.pos_x, self.to_publish.alt)
-                pose_msg.pose.orientation = self.quaternion_from_euler(self.to_publish.pitch, self.to_publish.roll, self.to_publish.yaw, deg=True)
+            # message sending
+            if self._rec_data_imu:
+                self._lock.acquire()
                 
-                twist_msg = TwistStamped()
-                twist_msg.header.stamp = rospy.Time.now()
-                twist_msg.twist.linear = Vector3(-self.to_publish.kalman_vy, self.to_publish.kalman_vx, 0)
-                twist_msg.twist.angular = Vector3(self.to_publish.gyro_y, self.to_publish.gyro_x, self.to_publish.gyro_z)
-                # print(pose_msg)
-                # print(twist_msg)
-                self.pose_pub.publish(pose_msg)
-                
-                self.twist_pub.publish(twist_msg)
-
-                # print("RATES: Data: %.2f, GyroData: %.2f, StabilizerData: %.2f, KalmanData: %.2f"% (self.data_freq_timer.get(), self.data_gyro_freq_timer.get(), self.data_stab_freq_timer.get(), self.data_kalman_freq_timer.get()))
-
-                self._rec_data = False
-                self._rec_data_gyro = False
-                self._rec_data_stab = False
-                self._rec_data_kalman = False
-                # self._rec_data_mag = False
-
-            if self._imu_rec_gyro and self._imu_rec_acc:
-
-                ## ROS COORDINATES AGAIN
+                ## ROS COORDINATES
                 imu_msg = Imu();
                 imu_msg.header.stamp = rospy.Time.now()
                 imu_msg.angular_velocity = self.quaternion_from_euler(self.to_publish.gyro_y, self.to_publish.gyro_x, self.to_publish.gyro_z)
                 imu_msg.linear_acceleration = self.quaternion_from_euler(-self.to_publish.accel_y, self.to_publish.accel_x, self.to_publish.accel_z)
                 imu_msg.orientation_covariance[0] = -1 # orientation estimates not present
 
+                # send the imu message
                 self.imu_pub.publish(imu_msg)
+                self._rec_data_imu = False
+                
+                # if all data is available, send pose, twist, and cf data
+                if self._rec_data_stab and self._rec_data_kalman:
+                    self.data_pub.publish(self.to_publish)
+                    # self.to_publish = None
+
+                    ### THIS IS ALL IN ROS COORDINATES (X: right, Y: forward, Z: up)
+                    pose_msg = PoseStamped()
+                    pose_msg.header.stamp = rospy.Time.now()
+                    pose_msg.pose.position = Vector3(-self.to_publish.pos_y, self.to_publish.pos_x, self.to_publish.alt)
+                    pose_msg.pose.orientation = self.quaternion_from_euler(self.to_publish.pitch, self.to_publish.roll, self.to_publish.yaw, deg=True)
+                    
+                    twist_msg = TwistStamped()
+                    twist_msg.header.stamp = rospy.Time.now()
+                    twist_msg.twist.linear = Vector3(-self.to_publish.kalman_vy, self.to_publish.kalman_vx, 0)
+                    twist_msg.twist.angular = Vector3(self.to_publish.gyro_y, self.to_publish.gyro_x, self.to_publish.gyro_z)
+
+                    self.pose_pub.publish(pose_msg)
+                    self.twist_pub.publish(twist_msg)
+
+                    t = TransformStamped()
+                    t.transform.translation = pose_msg.pose.position
+                    t.transform.rotation = pose_msg.pose.orientation
+                    t.header.stamp = rospy.Time.now()
+                    t.header.frame_id = "map"
+                    t.child_frame_id = "cf"
+
+                    self.tf_br.sendTransform(t)
+                    # self.tf_br.sendTransform((-self.to_publish.pos_y, self.to_publish.pos_x, self.to_publish.alt), 
+                                # (pose_msg.pose.orientation.x, pose_msg.pose.orientation.y, pose_msg.pose.orientation.z, pose_msg.pose.orientation.w), rospy.Time.now(), 'cf', 'world')
+                    # print("RATES: ImuData: %.2f, StabilizerData: %.2f, KalmanData: %.2f"% (self.data_imu_freq_timer.get(), self.data_stab_freq_timer.get(), self.data_kalman_freq_timer.get()))
+
+                    self._rec_data_stab = False
+                    self._rec_data_kalman = False
 
 
-                self._imu_rec_acc = False
-                self._imu_rec_gyro = False
-                # print("MAG:", data)
+                self._lock.release()
 
         except Exception as e:
-            print(str(e))
+            print("Exception:", str(e))
 
-        self._lock.release()
         # d.alt = float(data['posEstimatorAlt.estimatedZ'])
 
     ## COMMANDS ##
@@ -441,7 +490,7 @@ class Crazyflie:
     def sign(self, x):
         return 1 if x >= 0 else -1
 
-    def goto_kp(self, dx, dy, kp=1.0, dt=0.05, TOL=0.05, alt=0.4):
+    def goto_kp(self, dx, dy, kp=1.0, dt=0.05, TOL=0.05, alt=0.4, vcap=0.5):
 
         start_x = self.to_publish.pos_x
         start_y = self.to_publish.pos_y
@@ -451,13 +500,19 @@ class Crazyflie:
 
         while math.sqrt(err_x**2 + err_y**2) > TOL:
             print("ERR:", err_x, ",", err_y)
-            vx = min(0.4, kp * abs(err_x)) * self.sign(err_x)
-            vy = min(0.4, kp * abs(err_y)) * self.sign(err_y)
+            vx = min(vcap, kp * abs(err_x)) * self.sign(err_x)
+            vy = min(vcap, kp * abs(err_y)) * self.sign(err_y)
             self.cf.commander.send_hover_setpoint(vx, vy, 0, alt)
             time.sleep(dt)
 
             err_x = (start_x + dx) - self.to_publish.pos_x
             err_y = (start_y + dy) - self.to_publish.pos_y
+
+    # waits for dt * count, stationary motion
+    def block_wait(self, count, alt=0.4, dt=0.1):
+        for i in range(count):
+            self.cf.commander.send_hover_setpoint(0, 0, 0, alt)
+            time.sleep(dt)
 
     def square_motion(self, alt=0.4):
         print("TAKEOFF")
@@ -466,34 +521,29 @@ class Crazyflie:
             time.sleep(0.1)
 
         dt = 0.1
-        TOL = 0.08 #m tolerance
+        TOL = 0.04 #m tolerance
+        kp = 1.0
+        edge = 0.5
+
+        self.block_wait(30, alt, dt) #3s wait
 
         print("FIRST")
-        self.goto_kp(0.5, 0, kp=0.6)
+        self.goto_kp(edge, 0, kp=kp)
+        self.block_wait(30, alt, dt) #3s wait
+
         print("SECOND")
-        self.goto_kp(0, -0.5, kp=0.6)
+        self.goto_kp(0, -edge, kp=kp)
+        self.block_wait(30, alt, dt) #3s wait
+
         print("THIRD")
-        self.goto_kp(-0.5, 0, kp=0.6)
+        self.goto_kp(-edge, 0, kp=kp)
+        self.block_wait(30, alt, dt) #3s wait
+
         print("FOURTH")
-        self.goto_kp(0, 0.5, kp=0.6)
+        self.goto_kp(0, edge, kp=kp)
+        self.block_wait(30, alt, dt) #3s wait
+
         print("LAND")
-
-        # for _ in range(int(2.0/dt)):
-        #     time.sleep(dt)
-        #     self.cf.commander.send_position_setpoint(0, -1, alt, 0)
-
-        # for _ in range(int(2.0/dt)):
-        #     time.sleep(dt)
-        #     self.cf.commander.send_position_setpoint(0, 0, alt, 0)
-
-        # time.sleep(2)
-        # self.cf.commander.send_position_setpoint(1, -1, alt, 0)
-        # time.sleep(2)
-        # self.cf.commander.send_position_setpoint(0, -1, alt, 0)
-        # time.sleep(2)
-        # self.cf.commander.send_position_setpoint(0, 0, alt, 0)
-        # time.sleep(2)
-
         for y in range(10):
             self.cf.commander.send_hover_setpoint(0, 0, 0, alt - (y / 10 * alt))
             time.sleep(0.1)
