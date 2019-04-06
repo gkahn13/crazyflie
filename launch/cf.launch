@@ -4,6 +4,8 @@
     <arg name="is_raw" default="False"/>
     <arg name="uri" default="radio://0/80/250K"/>
     <arg name="data_only" default="False"/>
+    <arg name="motion" default="None"/>
+    <arg name="config" default="None"/>
 
     <node name="controller_node$(arg id)" pkg="crazyflie" type="controller_node.py" output="screen">
         <param name="id" value="$(arg id)"/>
@@ -14,6 +16,8 @@
         <param name="id" value="$(arg id)"/>
         <param name="uri" value="$(arg uri)"/>
         <param name="data_only" value='$(arg data_only)'/>
+        <param name="motion" value='$(arg motion)'/>
+        <param name="config" value='$(arg config)'/>
     </node>
 
     <node name="cam_node$(arg id)" pkg="crazyflie" type="py3_cam_node.py" output="screen">

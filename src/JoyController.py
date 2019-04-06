@@ -12,6 +12,8 @@ from Controller import Controller
 
 import signal
 
+import threading
+
 THROTTLE_AXIS = 5 # up 1
 ROLL_AXIS = 2 #left 1
 PITCH_AXIS = 3 #up 1
@@ -27,8 +29,8 @@ ROLL_CLIP = abs(ROLL_SCALE) * 0.4
 PITCH_CLIP = abs(PITCH_SCALE) * 0.1
 
 #standard motion
-VX_SCALE = 0.5
-VY_SCALE = 0.5
+VX_SCALE = 1# 0.5
+VY_SCALE = 1# 0.5
 
 TAKEOFF_CHANNEL = 7 #RT
 ESTOP_CHANNEL = 2 #B
@@ -48,6 +50,8 @@ class JoyController(Controller):
         Controller.__init__(self, ID)
         self.use_joy = use_joy
 
+        self.access_lock = threading.Lock()
+
         if self.use_joy:
             self.joy_sub = rospy.Subscriber(joystick_topic, Joy, self.joy_cb)
         else:
@@ -66,6 +70,8 @@ class JoyController(Controller):
             return None
 
         motion = None
+
+        self.access_lock.acquire()
 
         if self.cmd != -1:
             motion = CFCommand()
@@ -105,7 +111,9 @@ class JoyController(Controller):
             # print(self.curr_joy.axes)
             motion.dz = self.curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             # print("ALT CHANGE: %.3f" % motion.dz)
-            
+
+        self.access_lock.release()
+
         return motion
     
 
@@ -118,6 +126,9 @@ class JoyController(Controller):
 
 
     def joy_cb(self, msg):
+
+        self.access_lock.acquire()
+
         if self.curr_joy:
             if msg.buttons[ESTOP_CHANNEL] and not self.curr_joy.buttons[ESTOP_CHANNEL]:
                 #takeoff
@@ -144,6 +155,8 @@ class JoyController(Controller):
                 #takeoff
                 self.cmd = CFCommand.LAND
                 print("CALLING LAND")
+
+        self.access_lock.release()
 
         self.dead_band(msg)
         self.curr_joy = msg

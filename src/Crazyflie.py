@@ -30,6 +30,7 @@ import time
 import signal
 import sys
 import os
+import re
 
 import threading
 
@@ -44,6 +45,10 @@ cmd_type = ['']*3
 cmd_type[CFCommand.ESTOP] = 'ESTOP'
 cmd_type[CFCommand.LAND] = 'LAND'
 cmd_type[CFCommand.TAKEOFF] = 'TAKEOFF'
+
+# for example, half_cage_8_wash_lr (means 4 washers on left and right holds)
+cfg_options = [r'^None$', 
+        r'^((half)|(full))_cage(_(\d+)_((wash)|(cork))_((lr)|(left)|(right)))*$']
 
 # exp averaging timer
 class FreqTimer:
@@ -71,13 +76,21 @@ class FreqTimer:
 class Crazyflie:
 
     # ID is for human readability
-    def __init__(self, cf_id, radio_uri, data_only=False, motion='None'):
+    def __init__(self, cf_id, radio_uri, data_only=False, motion='None', config='None'):
         self._id = cf_id
         self._uri = radio_uri
 
+        # represents any extra hardware configuration details
+        # important for capturing weight / config details
+        
+        if len([a for a in cfg_options if re.compile(a).match(config)]) == 0:
+            print("[WARNING] Config option not recognized: %s" % config)
+
+        self._config = config
+
         self.stop_sig = False
 
-        self.data_imu_freq_timer = FreqTimer('DATA')
+        # self.data_imu_freq_timer = FreqTimer('DATA')
         # self.data_gyro_freq_timer = FreqTimer('GYRODATA')
         self.data_stab_freq_timer = FreqTimer('STABDATA')
         self.data_kalman_freq_timer = FreqTimer('KALMDATA')
@@ -94,7 +107,7 @@ class Crazyflie:
         self.alt = 0
         self.to_publish = None
 
-        self._rec_data_imu = False
+        # self._rec_data_imu = False
         # self._rec_data_gyro = False
         self._rec_data_stab = False
         self._rec_data_kalman = False
@@ -102,7 +115,7 @@ class Crazyflie:
         # self._rec_data_mag = False
 
 
-        self._lock = threading.Lock()
+        self.cb_lock = threading.Lock()
 
         # self.bridge = CvBridge()
 
@@ -163,6 +176,7 @@ class Crazyflie:
     def signal_handler(self, sig, frame):
         if self.cf_active:
             self.cmd_estop()
+            self.cf.close_link()
         self.stop_sig = True
         rospy.signal_shutdown("CtrlC")
 
@@ -199,23 +213,23 @@ class Crazyflie:
 
         self.cf_active = True
 
-        self.log_imu_data = LogConfig(name="ImuData", period_in_ms=25)
-        self.log_imu_data.add_variable('acc.x', 'FP16')
-        self.log_imu_data.add_variable('acc.y', 'FP16')
-        self.log_imu_data.add_variable('acc.z', 'FP16')
-        self.log_imu_data.add_variable('gyro.x', 'FP16')
-        self.log_imu_data.add_variable('gyro.y', 'FP16')
-        self.log_imu_data.add_variable('gyro.z', 'FP16')
+        # self.log_imu_data = LogConfig(name="ImuData", period_in_ms=25)
+        # self.log_imu_data.add_variable('acc.x', 'FP16')
+        # self.log_imu_data.add_variable('acc.y', 'FP16')
+        # self.log_imu_data.add_variable('acc.z', 'FP16')
+        # self.log_imu_data.add_variable('gyro.x', 'FP16')
+        # self.log_imu_data.add_variable('gyro.y', 'FP16')
+        # self.log_imu_data.add_variable('gyro.z', 'FP16')
 
-        try:
-            self.cf.log.add_config(self.log_imu_data)
-            self.log_imu_data.data_received_cb.add_callback(self.received_data)
-            self.log_imu_data.start()
-        except KeyError as e:
-            print('Could not start log configuration,'
-                  '{} not found in TOC'.format(str(e)))
-        except AttributeError as e:
-            print('Could not add ImuData log config, bad configuration: %s' % str(e))
+        # try:
+        #     self.cf.log.add_config(self.log_imu_data)
+        #     self.log_imu_data.data_received_cb.add_callback(self.received_data)
+        #     self.log_imu_data.start()
+        # except KeyError as e:
+        #     print('Could not start log configuration,'
+        #           '{} not found in TOC'.format(str(e)))
+        # except AttributeError as e:
+        #     print('Could not add ImuData log config, bad configuration: %s' % str(e))
         
         self.log_kalman_data = LogConfig(name='KalmanData', period_in_ms=25)
         
@@ -224,6 +238,7 @@ class Crazyflie:
         self.log_kalman_data.add_variable('stateEstimate.x', 'FP16')
         self.log_kalman_data.add_variable('stateEstimate.y', 'FP16')
         self.log_kalman_data.add_variable('stateEstimate.z', 'FP16')
+        self.log_kalman_data.add_variable('pm.vbat', 'FP16')
     
         try:
             self.cf.log.add_config(self.log_kalman_data)
@@ -240,7 +255,14 @@ class Crazyflie:
         self.log_stab_data.add_variable('stabilizer.pitch', 'FP16')
         self.log_stab_data.add_variable('stabilizer.roll', 'FP16')
         self.log_stab_data.add_variable('stabilizer.yaw', 'FP16')
-        self.log_stab_data.add_variable('pm.vbat', 'FP16')
+        # IMU DATA
+        self.log_stab_data.add_variable('gyro.x', 'FP16')
+        self.log_stab_data.add_variable('gyro.y', 'FP16')
+        self.log_stab_data.add_variable('gyro.z', 'FP16')
+        self.log_stab_data.add_variable('acc.x', 'FP16')
+        self.log_stab_data.add_variable('acc.y', 'FP16')
+        self.log_stab_data.add_variable('acc.z', 'FP16')
+        # self.log_stab_data.add_variable('pm.vbat', 'FP16')
     
         try:
             self.cf.log.add_config(self.log_stab_data)
@@ -295,11 +317,13 @@ class Crazyflie:
             self.alt = 0.4
             self.cmd_takeoff()
         else:
-            print("Not Accepting Commands -- but one was sent!")
+            print("Not Accepting Commands, but one was sent: %s" % cmd_type[msg.cmd])
 
     def motion_cb(self, msg):
         # print("ALT: %.3f" % self.alt)
         # print(msg)
+        data = (msg.x, msg.y, msg.yaw, msg.dz)
+
         if self.accept_commands:
             self.update_alt(msg)
             # switching between optical flow and roll pitch motion
@@ -308,8 +332,10 @@ class Crazyflie:
             else:
                 self.set_rp_motion(msg.x, msg.y, msg.yaw, self.alt)
 
-        else:
-            print("Not Accepting Motion Commands -- but one was sent!")
+        elif any(data):
+            # if a nonzero motion message was sent, notify
+            print("Not Accepting Motion Commands, but a nonzero "
+                + "one was sent: [x:%.2f, y:%.2f, yaw:%.2f, dz:%.2f]" % data)
 
     def update_alt(self, msg):
         
@@ -353,32 +379,39 @@ class Crazyflie:
 
 
     def received_data(self, timestamp, data, logconf):
-        # print("DATA RECEIVED")
+        # print("DATA RECEIVED: CF time: %d, Sys time: %d" % (timestamp, 1000*time.time()))
 
         if self.to_publish == None:
             self.to_publish = CFData()
             self.to_publish.ID = self._id
 
         try:
-            if logconf.name == 'ImuData':
-                self.data = data
+            # if logconf.name == 'ImuData':
+            #     self.data = data
+            #     self.to_publish.accel_x = self.f32_from_f16(data['acc.x'])
+            #     self.to_publish.accel_y = self.f32_from_f16(data['acc.y'])
+            #     self.to_publish.accel_z = self.f32_from_f16(data['acc.z'])
+            #     self.to_publish.gyro_x = self.f32_from_f16(data['gyro.x'])
+            #     self.to_publish.gyro_y = self.f32_from_f16(data['gyro.y'])
+            #     self.to_publish.gyro_z = self.f32_from_f16(data['gyro.z'])
+            #     # print(data)
+            #     # print("DATA")
+            #     self.data_imu_freq_timer.new_msg()
+
+            #     self._rec_data_imu = True
+
+            if logconf.name == 'StabilizerData':
+                self.to_publish.yaw = self.f32_from_f16(data['stabilizer.yaw'])
+                self.to_publish.pitch = self.f32_from_f16(data['stabilizer.pitch'])
+                self.to_publish.roll = self.f32_from_f16(data['stabilizer.roll'])
+                # IMU
                 self.to_publish.accel_x = self.f32_from_f16(data['acc.x'])
                 self.to_publish.accel_y = self.f32_from_f16(data['acc.y'])
                 self.to_publish.accel_z = self.f32_from_f16(data['acc.z'])
                 self.to_publish.gyro_x = self.f32_from_f16(data['gyro.x'])
                 self.to_publish.gyro_y = self.f32_from_f16(data['gyro.y'])
                 self.to_publish.gyro_z = self.f32_from_f16(data['gyro.z'])
-                # print(data)
-                # print("DATA")
-                self.data_imu_freq_timer.new_msg()
 
-                self._rec_data_imu = True
-
-            elif logconf.name == 'StabilizerData':
-                self.to_publish.yaw = self.f32_from_f16(data['stabilizer.yaw'])
-                self.to_publish.pitch = self.f32_from_f16(data['stabilizer.pitch'])
-                self.to_publish.roll = self.f32_from_f16(data['stabilizer.roll'])
-                self.to_publish.v_batt = self.f32_from_f16(data['pm.vbat'])
                 self._rec_data_stab = True
                 # print("STABDATA")
                 self.data_stab_freq_timer.new_msg()
@@ -389,6 +422,8 @@ class Crazyflie:
                 self.to_publish.pos_x = self.f32_from_f16(data['stateEstimate.x'])
                 self.to_publish.pos_y = self.f32_from_f16(data['stateEstimate.y'])
                 self.to_publish.alt = self.f32_from_f16(data['stateEstimate.z'])
+                self.to_publish.v_batt = self.f32_from_f16(data['pm.vbat'])
+
                 self._rec_data_kalman = True
                 # print("KALMDATA")
                 self.data_kalman_freq_timer.new_msg()
@@ -402,8 +437,8 @@ class Crazyflie:
             
 
             # message sending
-            if self._rec_data_imu:
-                self._lock.acquire()
+            if self._rec_data_stab: #self._rec_data_imu:
+                self.cb_lock.acquire()
                 
                 ## ROS COORDINATES
                 imu_msg = Imu();
@@ -414,15 +449,17 @@ class Crazyflie:
 
                 # send the imu message
                 self.imu_pub.publish(imu_msg)
-                self._rec_data_imu = False
+                self._rec_data_stab = False
                 
                 # if all data is available, send pose, twist, and cf data
-                if self._rec_data_stab and self._rec_data_kalman:
+                if self._rec_data_kalman:
+                    self.to_publish.ext_config = self._config
                     self.data_pub.publish(self.to_publish)
                     # self.to_publish = None
 
                     ### THIS IS ALL IN ROS COORDINATES (X: right, Y: forward, Z: up)
                     pose_msg = PoseStamped()
+                    pose_msg.header.frame_id = "map"
                     pose_msg.header.stamp = rospy.Time.now()
                     pose_msg.pose.position = Vector3(-self.to_publish.pos_y, self.to_publish.pos_x, self.to_publish.alt)
                     pose_msg.pose.orientation = self.quaternion_from_euler(self.to_publish.pitch, self.to_publish.roll, self.to_publish.yaw, deg=True)
@@ -447,14 +484,14 @@ class Crazyflie:
                                 # (pose_msg.pose.orientation.x, pose_msg.pose.orientation.y, pose_msg.pose.orientation.z, pose_msg.pose.orientation.w), rospy.Time.now(), 'cf', 'world')
                     # print("RATES: ImuData: %.2f, StabilizerData: %.2f, KalmanData: %.2f"% (self.data_imu_freq_timer.get(), self.data_stab_freq_timer.get(), self.data_kalman_freq_timer.get()))
 
-                    self._rec_data_stab = False
+                    # self._rec_data_stab = False
                     self._rec_data_kalman = False
 
 
-                self._lock.release()
+                self.cb_lock.release()
 
         except Exception as e:
-            print("Exception:", str(e))
+            print("Exception in received_data:", str(e))
 
         # d.alt = float(data['posEstimatorAlt.estimatedZ'])
 
@@ -480,7 +517,7 @@ class Crazyflie:
 
     def cmd_land(self, alt=0.4):
         if self.accept_commands==False:
-            print("cannot land right now")
+            print("CMD_LAND SENT: cannot land right now")
         else:
             for y in range(10):
                 self.cf.commander.send_hover_setpoint(0, 0, 0, alt - (y / 10 * alt))
@@ -552,7 +589,7 @@ class Crazyflie:
     def run(self):
         print("WAITING FOR ACTIVE CONNECTION")
         while not self.cf_active:
-            pass
+            time.sleep(0.1)
         print("FOUND ACTIVE CONNECTION")
 
         #handles image reads
@@ -566,6 +603,9 @@ class Crazyflie:
         rospy.spin()
 
         self.log_data.stop()
+        if not self.stop_sig:
+            self.cmd_estop()
+            self.cf.close_link()
 
 
 

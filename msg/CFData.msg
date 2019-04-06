@@ -1,5 +1,8 @@
 Header stamp
 uint16 ID
+
+string ext_config
+
 float32 accel_x
 float32 accel_y
 float32 accel_z
