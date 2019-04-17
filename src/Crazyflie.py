@@ -76,7 +76,7 @@ class FreqTimer:
 class Crazyflie:
 
     # ID is for human readability
-    def __init__(self, cf_id, radio_uri, data_only=False, motion='None', config='None'):
+    def __init__(self, cf_id, radio_uri, data_only=False, motion='None', config='None', warmup=True):
         self._id = cf_id
         self._uri = radio_uri
 
@@ -102,6 +102,9 @@ class Crazyflie:
         self.accept_commands = False
         self.data_only = data_only
         self.motion = prebuilt_motions[motion];
+        #only first time
+        self.first_takeoff = True
+        self.takeoff_warmup = warmup
 
         self.data = None
         self.alt = 0
@@ -114,8 +117,10 @@ class Crazyflie:
         # self._rec_data_pos = False
         # self._rec_data_mag = False
 
-
         self.cb_lock = threading.Lock()
+        
+        self.cmd_lock = threading.Lock()
+        self.cmd_in_use = False
 
         # self.bridge = CvBridge()
 
@@ -300,6 +305,11 @@ class Crazyflie:
         print("Connection Lost")
 
     def command_cb(self, msg):
+
+        self.cmd_lock.acquire()
+        self.cmd_in_use = True
+        self.cmd_lock.release()
+
         print("ALT: %.3f" % self.alt)
         if self.accept_commands:
             print("RECEIVED COMMAND : %s" % cmd_type[msg.cmd])
@@ -310,19 +320,39 @@ class Crazyflie:
                 self.cmd_land()
             elif cmd_type[msg.cmd] == 'TAKEOFF':
                 self.alt = 0.4
-                self.cmd_takeoff()
+                if self.first_takeoff and self.takeoff_warmup:
+                    self.warmup_takeoff_motion(alt=self.alt)
+                    self.first_takeoff = False
+                else:
+                    self.cmd_takeoff()
             else:
                 print('Invalid Command! %d' % msg.cmd)
         elif cmd_type[msg.cmd] == 'TAKEOFF':
             self.alt = 0.4
-            self.cmd_takeoff()
+            if self.first_takeoff and self.takeoff_warmup:
+                self.warmup_takeoff_motion(alt=self.alt)
+                self.first_takeoff = False
+            else:
+                self.cmd_takeoff()
         else:
             print("Not Accepting Commands, but one was sent: %s" % cmd_type[msg.cmd])
+
+
+        self.cmd_lock.acquire()
+        self.cmd_in_use = False
+        self.cmd_lock.release()
 
     def motion_cb(self, msg):
         # print("ALT: %.3f" % self.alt)
         # print(msg)
         data = (msg.x, msg.y, msg.yaw, msg.dz)
+
+        # drop motion packet if a command is running 
+        self.cmd_lock.acquire()
+        if self.cmd_in_use:
+            self.cmd_lock.release()
+            return
+        self.cmd_lock.release()
 
         if self.accept_commands:
             self.update_alt(msg)
@@ -527,7 +557,7 @@ class Crazyflie:
     def sign(self, x):
         return 1 if x >= 0 else -1
 
-    def goto_kp(self, dx, dy, kp=1.0, dt=0.05, TOL=0.05, alt=0.4, vcap=0.5):
+    def goto_kp(self, dx, dy, kp=1.0, kd=0, dt=0.05, TOL=0.05, alt=0.4, vcap=0.5):
 
         start_x = self.to_publish.pos_x
         start_y = self.to_publish.pos_y
@@ -535,12 +565,25 @@ class Crazyflie:
         err_x = (start_x + dx) - self.to_publish.pos_x
         err_y = (start_y + dy) - self.to_publish.pos_y
 
+        derr_x = 0
+        derr_y = 0
+
         while math.sqrt(err_x**2 + err_y**2) > TOL:
+
             print("ERR:", err_x, ",", err_y)
-            vx = min(vcap, kp * abs(err_x)) * self.sign(err_x)
-            vy = min(vcap, kp * abs(err_y)) * self.sign(err_y)
+
+            bx = kp * err_x + kd * derr_x
+            by = kp * err_y + kd * derr_y
+
+            vx = min(vcap, abs(bx)) * self.sign(bx)
+            vy = min(vcap, abs(by)) * self.sign(by)
+
+
             self.cf.commander.send_hover_setpoint(vx, vy, 0, alt)
             time.sleep(dt)
+
+            derr_x = (((start_x + dx) - self.to_publish.pos_x) - err_x)/dt
+            derr_y = (((start_y + dy) - self.to_publish.pos_y) - err_y)/dt
 
             err_x = (start_x + dx) - self.to_publish.pos_x
             err_y = (start_y + dy) - self.to_publish.pos_y
@@ -586,9 +629,72 @@ class Crazyflie:
             time.sleep(0.1)
         self.cmd_estop()
 
+    # wait = wait after takeoff before warming up (in dt's)
+    def warmup_takeoff_motion(self, alt=0.4, wait=30, dt=0.05):
+
+        # print("TAKEOFF")
+        # for y in range(10):
+        #     self.cf.commander.send_hover_setpoint(0, 0, 0, y / 10 * alt)
+        #     time.sleep(0.1)
+        self.cmd_takeoff(alt=alt)
+
+        self.block_wait(wait, alt, dt) #default 1.5s wait
+
+        # warmup sensors
+        for i in range(20):
+            self.cf.commander.send_hover_setpoint(0.5, 0, 0, alt)
+            time.sleep(dt)
+
+        for i in range(20):
+            self.cf.commander.send_hover_setpoint(-0.5, 0, 0, alt)
+            time.sleep(dt)
+
+        self.block_wait(10, alt, dt) #default 0.5s stop
+
+
+    def step_motion(self, alt=0.4):
+
+        # print("TAKEOFF")
+        # for y in range(10):
+        #     self.cf.commander.send_hover_setpoint(0, 0, 0, y / 10 * alt)
+        #     time.sleep(0.1)
+
+        # STEP motion
+
+        kp = 1.0
+        kd = 0.1
+        dist = 0.8
+        dt = 0.05
+
+        # TAKEOFF and sensor warmup
+        self.warmup_takeoff_motion(alt=alt, dt=dt)
+
+        # self.block_wait(30, alt, dt) #6s wait
+        
+        # # warmup sensors
+        # for i in range(20):
+        #     self.cf.commander.send_hover_setpoint(0.5, 0, 0, alt)
+        #     time.sleep(dt)
+
+        # for i in range(20):
+        #     self.cf.commander.send_hover_setpoint(-0.5, 0, 0, alt)
+        #     time.sleep(dt)
+        
+        self.block_wait(60, alt, dt) #3s wait
+
+        self.goto_kp(dist, 0, kp=kp, kd=kd, vcap=1.0)
+        self.block_wait(30, alt, dt) #1.5s wait
+
+        print("LAND")
+        for y in range(10):
+            self.cf.commander.send_hover_setpoint(0, 0, 0, alt - (y / 10 * alt))
+            time.sleep(0.1)
+        self.cmd_estop()
+
+
     def run(self):
         print("WAITING FOR ACTIVE CONNECTION")
-        while not self.cf_active:
+        while not self.cf_active and self.to_publish == None:
             time.sleep(0.1)
         print("FOUND ACTIVE CONNECTION")
 
@@ -609,4 +715,8 @@ class Crazyflie:
 
 
 
-prebuilt_motions = {'square': Crazyflie.square_motion, 'takeoff': Crazyflie.cmd_takeoff, 'None': None}
+prebuilt_motions = {'square': Crazyflie.square_motion, 
+                    'takeoff': Crazyflie.cmd_takeoff, 
+                    'step': Crazyflie.step_motion, 
+                    'warmup': Crazyflie.warmup_takeoff_motion, 
+                    'None': None}
