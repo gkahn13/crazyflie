@@ -82,6 +82,7 @@ class Controller:
                 print("-- COLLISION : E-stopping --")
                 action = CFCommand()
                 action.cmd = CFCommand.ESTOP
+                action.stamp.stamp = rospy.Time.now()
                 self.cmd_pub.publish(action)
                 self.coll_pub.publish(True)
                 #sleep for 2 seconds
@@ -93,11 +94,13 @@ class Controller:
 
             if isinstance(action, CFMotion):
                 # if action != Controller.DO_NOTHING_CMD:
+                action.stamp.stamp = rospy.Time.now()
                 self.motion_pub.publish(action)
 
                 # else:
                 #     print("--- DO NOTHING CMD SENT ---")
             elif isinstance(action, CFCommand):
+                action.stamp.stamp = rospy.Time.now()
                 self.cmd_pub.publish(action)
                 print( "CALLED COMMAND -> %s" % cmd_type[action.cmd])
 

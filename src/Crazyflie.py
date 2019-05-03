@@ -451,7 +451,7 @@ class Crazyflie:
                 self.to_publish.kalman_vy = self.f32_from_f16(data['kalman_states.vy'])
                 self.to_publish.pos_x = self.f32_from_f16(data['stateEstimate.x'])
                 self.to_publish.pos_y = self.f32_from_f16(data['stateEstimate.y'])
-                self.to_publish.alt = self.f32_from_f16(data['stateEstimate.z'])
+                self.to_publish.pos_z = self.to_publish.alt = self.f32_from_f16(data['stateEstimate.z'])
                 self.to_publish.v_batt = self.f32_from_f16(data['pm.vbat'])
 
                 self._rec_data_kalman = True
