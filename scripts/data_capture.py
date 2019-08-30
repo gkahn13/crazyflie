@@ -395,7 +395,7 @@ if __name__ == '__main__':
         print('## Beginning Episode.')
 
         # _rosbag_lock.acquire()
-        _rosbag.open(_ros_topics_and_types.keys() + _ros_global_topics)
+        _rosbag.open(list(_ros_topics_and_types.keys()) + list(_ros_global_topics))
         # _rosbag_lock.release()
         
         print('## Resetting.')

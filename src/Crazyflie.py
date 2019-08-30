@@ -708,7 +708,8 @@ class Crazyflie:
 
         rospy.spin()
 
-        self.log_data.stop()
+        self.log_kalman_data.stop()
+        self.log_stab_data.stop()
         if not self.stop_sig:
             self.cmd_estop()
             self.cf.close_link()
