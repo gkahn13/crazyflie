@@ -18,6 +18,7 @@ from crazyflie.msg import CFMotion
 import time
 import os
 import imutils
+import math
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -64,6 +65,7 @@ class PendulumVisualization:
         self._id = ID
         self._raw = raw
         self._num_trajectories = num_trajectories
+        self.rosbag_unnormalized = False
 
         self.bridge = CvBridge()
 
@@ -108,10 +110,10 @@ class PendulumVisualization:
         self.axImg.set_title('Image & Trajectories')
 
         # Setting the 3D axes properties
-        self.ax3D.set_xlim3d([-1.0, 1.0])
+        self.ax3D.set_xlim3d([1.0, -1.0])
         self.ax3D.set_xlabel('VX')
 
-        self.ax3D.set_ylim3d([-1.0, 1.0])
+        self.ax3D.set_ylim3d([1.0, -1.0])
         self.ax3D.set_ylabel('VY')
 
         self.ax3D.set_zlim3d([-1.0, 1.0])
@@ -137,35 +139,75 @@ class PendulumVisualization:
             else:
                 dup_img = self.bridge.compressed_imgmsg_to_cv2(self.latest_ext_img, "rgb8")
 
-            # draw trajectories on image once we have markers for each trajectory
-            if self.latest_target_vector is not None:
-                # print(self.latest_target_vector)
-                for i, traj_marker in enumerate(self.latest_traj_markers):
-                    if traj_marker is not None:
+        else:
+            dup_img = np.zeros(shape=[HEIGHT, WIDTH, 3], dtype=np.uint8)
+
+        # draw trajectories on image once we have markers for each trajectory
+        if self.latest_target_vector is not None:
+            # print(self.latest_target_vector)
+            # determine color range
+
+            costs = [None] * len(self.latest_traj_markers)
+            for i, traj_marker in enumerate(self.latest_traj_markers):
+                if traj_marker is not None:
+                    cost = float(traj_marker.text)
+                    costs[i] = cost
+            color_list = self.map_costs_to_colors(costs)
+
+            for i, traj_marker in enumerate(self.latest_traj_markers):
+                if traj_marker is not None:
+                    if self.rosbag_unnormalized:
                         prev_pt = (int(self.latest_target_vector.vector.x), int(self.latest_target_vector.vector.y))
-                        for pt in traj_marker.points:
-                            next_pt = self.convert_to_pixel(pt.x, pt.y)
-                            if next_pt[0] >= WIDTH or next_pt[1] >= HEIGHT or next_pt[0] < 0 or next_pt[1] < 0:
-                                break
-                            cv2.line(dup_img, prev_pt, next_pt, (255, 255, 255), 2)
-                            prev_pt = next_pt
-                        self.latest_traj_markers[i] = None
+                    else:
+                        prev_pt = self.convert_to_pixel(self.latest_target_vector.vector.x, self.latest_target_vector.vector.y)
 
-            # draw goal position on image
-            if self.latest_goal_vector:
-                cv2.circle(dup_img, self.convert_to_pixel(self.latest_goal_vector.vector.x, self.latest_goal_vector.vector.y), 5, (0,0,255), -3)
+                    for pt in traj_marker.points:
+                        next_pt = self.convert_to_pixel(pt.x, pt.y)
+                        if next_pt[0] >= WIDTH or next_pt[1] >= HEIGHT or next_pt[0] < 0 or next_pt[1] < 0:
+                            break
+                        cv2.line(dup_img, prev_pt, next_pt, color_list[i], 2)
+                        prev_pt = next_pt
+                    self.latest_traj_markers[i] = None
 
-            # draw updated image
-            if self.img is None:
-                self.img = self.axImg.imshow(dup_img, animated=True)
-            else:
-                self.img.set_array(dup_img)
+        # draw goal position on image
+        if self.latest_goal_vector:
+            cv2.circle(dup_img, self.convert_to_pixel(self.latest_goal_vector.vector.x, self.latest_goal_vector.vector.y), 5, (0,0,255), -3)
+
+        # draw updated image
+        if self.img is None:
+            self.img = self.axImg.imshow(dup_img, animated=True)
+        else:
+            self.img.set_array(dup_img)
         
         ### 3D axis ###
 
         # draw action quiver
         if self.latest_action is not None:
+            # coordinate system (x forward) (y left) (z up)
             self.quiv.set_segments([[[0,0,0], [self.latest_action.vector.x, self.latest_action.vector.y, self.latest_action.vector.z]]])
+
+    # min cost is green, the rest are various shades of white on a log scale
+    def map_costs_to_colors(self, cost_list):
+        color_list = [(255,255,255) for _ in range(len(cost_list))]
+        # log_costs = [None for _ in range(len(cost_list))]
+        min_c = math.inf
+        max_c = -math.inf
+        min_i = None
+        for i, c in enumerate(cost_list):
+            if c is not None:
+                if c < min_c:
+                    min_c = c
+                    min_i = i
+                if c > max_c:
+                    max_c = c
+                    max_i = i
+
+        if min_i is not None:
+            color_list[min_i] = (0,255,0)
+
+        return color_list
+
+
 
     def convert_to_pixel(self, cx, cy):
        return (int(cx * WIDTH), int(cy * HEIGHT))

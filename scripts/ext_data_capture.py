@@ -3,6 +3,7 @@ import rosbag
 import os
 import os.path
 
+import random
 import argparse
 import time
 
@@ -24,6 +25,7 @@ YAW_AXIS = 0 #left 1
 ALT_AXIS = 5 # D-pad up
 
 DZ_INCREMENT = 0.02
+DT = 0.1
 
 #RP motion
 THROTTLE_SCALE = 0.1
@@ -39,6 +41,9 @@ THROTTLE_CLIP = abs(THROTTLE_SCALE) * 0.2
 VX_SCALE = 0.5
 VY_SCALE = 0.5
 
+# arbitrary 8% of max is the std dev of noise 
+VXY_NOISE_STD = abs(VX_SCALE) * 0.08 # m/s variance
+VZ_NOISE_STD = abs(THROTTLE_SCALE) * 0.08 * DT # m/s variance * dt
 
 class RolloutRosbag:
     def __init__(self, rosbag_dir):
@@ -150,8 +155,9 @@ if __name__ == '__main__':
     parser.add_argument('--rosbag-dir', type=str, required=True)
     parser.add_argument('--max-steps', type=int, default=-1, help="Max Number of steps per episode.")
     parser.add_argument('--ros-prefix', type=str, default="/cf/0/")
-    parser.add_argument('--is-flow', type=bool, default=False)
-    parser.add_argument('--action-noise', type=bool, default=False)
+    parser.add_argument('--is-flow', type=bool, default=True)
+    parser.add_argument('--no-action-noise', action='store_true')
+    parser.add_argument('--action-bounding', action='store_true')
     parser.add_argument('--enable-yaw', action='store_true')
     # parser.add_argument('-ca', '--ctrl_arg', action='append', nargs=2, default=[])
     # parser.add_argument('-o', '--override', action='append', nargs=2, default=[])
@@ -210,6 +216,19 @@ if __name__ == '__main__':
     _ros_global_topics = ['/tf', '/tf_static']
     ## START OF CB
     
+    def bound_action_by_target_loc(motion, vector):
+        nx,ny,ndz = motion.x, motion.y, motion.dz
+        if motion.y > 0 and vector.x < 0.05: # left moving and we are close to left edge
+            ny = 0
+        if motion.y < 0 and vector.x > 0.95: # right
+            ny = 0
+        if motion.dz > 0 and vector.y < 0.05: # up
+            ndz = 0
+        if motion.dz < 0 and vector.y > 0.95: # down
+            ndz = 0
+
+        return nx, ny, ndz
+
     def msg_cb(msg, args):
         topic = args[0]
         global _is_collision
@@ -294,6 +313,23 @@ if __name__ == '__main__':
 
             _curr_motion.dz = _curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             _curr_motion.dz = _curr_motion.dz if abs(_curr_motion.dz) > THROTTLE_CLIP else 0
+
+            if not args.no_action_noise and _is_flow_motion:
+                _curr_motion.x += random.random() * VXY_NOISE_STD
+                _curr_motion.y += random.random() * VXY_NOISE_STD
+                _curr_motion.dz += random.random() * VZ_NOISE_STD
+
+            if args.action_bounding:
+                if 'extcam/target_vector' in _ros_msg_queue:
+                    vec = _ros_msg_queue['extcam/target_vector'].vector
+                    if vec.x != 0 or vec.y != 0 or vec.z != 0:
+                        # assumes normalization
+                        nx,ny,ndz = bound_action_by_target_loc(_curr_motion, vec)
+                        _curr_motion.x = nx
+                        _curr_motion.y = ny
+                        _curr_motion.dz = ndz
+
+            _curr_motion.is_flow_motion = _is_flow_motion
 
        ## END OF CB
 

@@ -1,10 +1,15 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 
 import rospy
+import sys
+
+# opencv import
+sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+import cv2
+sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
 import cv_bridge
 from cv_bridge import CvBridge
-import cv2
 import rospy
 import numpy as np
 from sensor_msgs.msg import Image, CompressedImage
@@ -283,7 +288,7 @@ class ExternalCamera:
     ## THREADS ##
     def run(self):
         try: 
-            print 'External Camera Node starting on cam ID: %d' % (self.cam_id)
+            print('External Camera Node starting on cam ID: %d' % (self.cam_id))
             cap = cv2.VideoCapture(self.cam_id)
             # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
@@ -319,10 +324,10 @@ class ExternalCamera:
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:
-            print "EXTERNAL CAMERA STREAM FAILED -- CHECK INPUTS"
-            print "Error: " + str(e)
+            print("EXTERNAL CAMERA STREAM FAILED -- CHECK INPUTS")
+            print("Error: " + str(e))
 
-        print " -- External Camera Finished -- "
+        print(" -- External Camera Finished -- ")
 
 
     ## CALIBRATION SERVICE ##

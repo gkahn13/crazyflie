@@ -48,6 +48,7 @@ if __name__ == '__main__':
     else:
         coef_cx = coef_cy = coef_area = 1.
     
+    skipped = 0
     # iterate through all the input bag files
     for filename in args.input_list:
         prev_time = None
@@ -78,17 +79,17 @@ if __name__ == '__main__':
 
             if 'target_vector' in topic:
                 # only nonzero target vectors
-                if not (msg.vector.x == 0 and msg.vector.y == 0):
-                    # dup check
-                    if msg.header.seq in seq_nos[topic]:
-                        continue
-                    else:
-                        seq_nos[topic].add(msg.header.seq)
-
+                # if not (msg.vector.x == 0 and msg.vector.y == 0):
+                # dup check
+                if msg.header.seq in seq_nos[topic]:
+                    continue
+                else:
                     seq_nos[topic].add(msg.header.seq)
-                    state[0] = msg.vector.x * coef_cx
-                    state[1] = msg.vector.y * coef_cy
-                    state[2] = msg.vector.z * coef_area
+
+                seq_nos[topic].add(msg.header.seq)
+                state[0] = msg.vector.x * coef_cx
+                state[1] = msg.vector.y * coef_cy
+                state[2] = msg.vector.z * coef_area
             elif 'motion' in topic:
                 msg_time = msg.stamp.stamp.secs + msg.stamp.stamp.nsecs/1e9
                 if msg.is_flow_motion:
@@ -103,14 +104,19 @@ if __name__ == '__main__':
                     ac[1] = msg.y
                     ac[2] = msg.dz
 
-                    # append action and latest state
-                    states.append(np.copy(state))
-                    acs.append(np.copy(ac))
-                    if i > 0:
-                        time_diffs.append((msg_time-prev_time))
-                    
+                    if state[0] == 0 and state[1] == 0:
+                        skipped += 1
+                    else:
+
+                        # append action and latest state
+                        states.append(np.copy(state))
+                        acs.append(np.copy(ac))
+                        if i > 0:
+                            time_diffs.append((msg_time-prev_time))
+
+                        i += 1
+
                     prev_time = msg_time
-                    i += 1
 
 
                 # if prev_save_time:
@@ -118,9 +124,9 @@ if __name__ == '__main__':
                 # prev_save_time = prev_time
         bag.close()
 
-    print("##########################################################")
-    print("## Saving %d states, %d actions, %d time diffs" % (len(states), len(acs), len(time_diffs)))
+    print("#############################################################")
+    print("## Saving %d states, %d actions, %d time diffs (skipped %d)" % (len(states), len(acs), len(time_diffs), skipped))
     print("## Total time elapsed: %.9f seconds" % np.sum(time_diffs))
-    print("##########################################################")
+    print("#############################################################")
 
     savemat(args.output_file, {'obs': states, 'acs': acs, 'diffs': time_diffs})

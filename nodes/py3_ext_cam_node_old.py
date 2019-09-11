@@ -1,27 +1,12 @@
 #!/usr/bin/env python
 
+import subprocess
+import os
 import sys
-# import os
+
 import rospy
 
-# sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
-# sys.path.append( "$HOME/catkin_ws/src/crazyflie/src")
-import crazyflie
-
-
-
-from ExternalCamera import ExternalCamera
-
-import logging
-# Only output errors from the logging framework
-logging.basicConfig(level=logging.ERROR)
-
-import time
-import signal
-
-
 if __name__ == '__main__':
-
     rospy.init_node('ExternalCamera', anonymous=True)
 
     cam_id_param = rospy.search_param('cam_id')
@@ -36,8 +21,16 @@ if __name__ == '__main__':
         is_raw = 'False'
     else:
         is_raw = rospy.get_param(is_raw_param, 'False')
-
+        
     cam_id = int(rospy.get_param(cam_id_param, '0'))
 
-    cam = ExternalCamera(int(cam_id), is_raw=='True')
-    cam.run()
+    path = os.path.join(os.getenv('HOME'), "catkin_ws", "src", "crazyflie", "nodes", "py2_ext_cam_node.py")
+    py2_cmd = "python2 %s %d %s" % (path, cam_id, is_raw)
+
+    p = subprocess.Popen(py2_cmd.split())
+
+    while not rospy.is_shutdown():
+    	pass
+
+    print(" -- Remotely Terminating Camera Node -- ")
+    p.kill()
