@@ -28,7 +28,7 @@ DZ_INCREMENT = 0.02
 DT = 0.1
 
 #RP motion
-THROTTLE_SCALE = 0.1
+THROTTLE_SCALE = 0.05
 ROLL_SCALE = -25
 PITCH_SCALE = -25
 YAW_SCALE = -120
@@ -42,8 +42,8 @@ VX_SCALE = 0.5
 VY_SCALE = 0.5
 
 # arbitrary 8% of max is the std dev of noise 
-VXY_NOISE_STD = abs(VX_SCALE) * 0.08 # m/s variance
-VZ_NOISE_STD = abs(THROTTLE_SCALE) * 0.08 * DT # m/s variance * dt
+VXY_NOISE_STD = abs(VX_SCALE) * 0.30 # variance 30% of max speed
+VZ_NOISE_STD = abs(THROTTLE_SCALE) * 0.2 * DT # variance 20% of max throttle speed
 
 class RolloutRosbag:
     def __init__(self, rosbag_dir):
@@ -314,6 +314,7 @@ if __name__ == '__main__':
             _curr_motion.dz = _curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             _curr_motion.dz = _curr_motion.dz if abs(_curr_motion.dz) > THROTTLE_CLIP else 0
 
+            # adding action noise during recording
             if not args.no_action_noise and _is_flow_motion:
                 _curr_motion.x += random.random() * VXY_NOISE_STD
                 _curr_motion.y += random.random() * VXY_NOISE_STD
@@ -328,6 +329,14 @@ if __name__ == '__main__':
                         _curr_motion.x = nx
                         _curr_motion.y = ny
                         _curr_motion.dz = ndz
+
+            # extra bounding for altitude (to make sure CF and alt sensor are in their working range)
+            if _ros_prefix + 'data' in _ros_msg_queue:
+                data = _ros_msg_queue[_ros_prefix + 'data']
+                if data.alt < 0.15 and _curr_motion.dz < 0:# minimum 15 cm off the ground
+                    _curr_motion.dz = 0
+                if data.alt > 1.0 and _curr_motion.dz > 0:# maximum is 1m off the ground
+                    _curr_motion.dz = 0
 
             _curr_motion.is_flow_motion = _is_flow_motion
 
