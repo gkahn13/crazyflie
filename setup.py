@@ -5,7 +5,9 @@ from catkin_pkg.python_setup import generate_distutils_setup
 
 # fetch values from package.xml
 setup_args = generate_distutils_setup(
-    packages=['crazyflie'],
-    package_dir={'': 'src'})
+    packages=['crazyflie', 'crazyflie.sim'],
+    package_dir={'': 'src'},
+    scripts=['scripts/data_capture.py','scripts/ext_data_capture.py','scripts/ext_sanity_data_capture.py','scripts/view_camera.py']
+)
 
 setup(**setup_args)

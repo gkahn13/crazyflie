@@ -4,10 +4,7 @@ import rospy
 import os
 import sys
 
-sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
-
-import PendulumVisualization
-from PendulumVisualization import PendulumVisualization
+from crazyflie import PendulumVisualization
 
 import logging
 # Only output errors from the logging framework

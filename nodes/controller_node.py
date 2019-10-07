@@ -4,9 +4,7 @@ import rospy
 import sys
 import os
 
-sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
-
-from Controller import Controller
+from crazyflie import Controller
 
 
 if __name__ == '__main__':

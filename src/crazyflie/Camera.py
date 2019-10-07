@@ -1,6 +1,12 @@
-#!/usr/bin/python2
+#!/usr/bin/env python
 
 import rospy
+import sys
+
+# opencv import
+sys.path.remove('/opt/ros/kinetic/lib/python2.7/dist-packages')
+import cv2
+sys.path.append('/opt/ros/kinetic/lib/python2.7/dist-packages')
 
 import cv_bridge
 from cv_bridge import CvBridge
@@ -51,7 +57,7 @@ class Camera:
     ## THREADS ##
     def run(self):
         try: 
-            print 'Camera Node %d starting on cam ID: %d' % (self.id, self.cam_id)
+            print('Camera Node %d starting on cam ID: %d' % (self.id, self.cam_id))
             cap = cv2.VideoCapture(self.cam_id) # TODO: multiple vid captures in parallel
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, 192)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 144)
@@ -90,10 +96,10 @@ class Camera:
             cap.release()
             cv2.destroyAllWindows()
         except Exception as e:
-            print "CAMERA %d STREAM FAILED -- CHECK INPUTS" % self.id
-            print "Error: " + str(e)
+            print("CAMERA %d STREAM FAILED -- CHECK INPUTS" % self.id)
+            print("Error: " + str(e))
 
-        print " -- Camera %d Finished -- " % self.id
+        print(" -- Camera %d Finished -- " % self.id)
 
 
     ## CALIBRATION SERVICE ##

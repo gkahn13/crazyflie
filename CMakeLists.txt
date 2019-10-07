@@ -206,14 +206,13 @@ include_directories(
 ## Add folders to be run by python nosetests
 # catkin_add_nosetests(test)
 
-
 catkin_install_python(PROGRAMS nodes/cf_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 catkin_install_python(PROGRAMS nodes/py3_cam_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
-catkin_install_python(PROGRAMS nodes/py2_cam_node.py
+catkin_install_python(PROGRAMS nodes/py3_ext_cam_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION})
 
 catkin_install_python(PROGRAMS nodes/controller_node.py

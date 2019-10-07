@@ -4,13 +4,7 @@ import sys
 # import os
 import rospy
 
-# sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
-# sys.path.append( "$HOME/catkin_ws/src/crazyflie/src")
-import crazyflie
-
-
-
-from ExternalCamera import ExternalCamera
+from crazyflie import ExternalCamera
 
 import logging
 # Only output errors from the logging framework

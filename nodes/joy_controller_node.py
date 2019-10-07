@@ -6,8 +6,7 @@ import os
 
 sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
 
-from JoyController import JoyController
-
+from crazyflie import JoyController
 
 if __name__ == '__main__':
 

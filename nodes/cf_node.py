@@ -4,10 +4,7 @@ import rospy
 import os
 import sys
 
-sys.path.append( os.getenv("HOME") + "/catkin_ws/src/crazyflie/src")
-
-import Crazyflie
-from Crazyflie import Crazyflie
+from crazyflie import Crazyflie
 
 import logging
 # Only output errors from the logging framework
