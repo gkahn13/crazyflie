@@ -133,8 +133,10 @@ if __name__ == '__main__':
     parser.add_argument('--is-flow', type=bool, default=True)
     parser.add_argument('--no-action-noise', action='store_true')
     parser.add_argument('--render', action='store_true')
+    parser.add_argument('--uncorrelated', action='store_true', help="actions are uncorrelated")
     parser.add_argument('--action-bounding', action='store_true')
     parser.add_argument('--enable-yaw', action='store_true')
+    parser.add_argument('--lag', type=int, default=0, help="how much artificial lag to add to system")
     # parser.add_argument('-ca', '--ctrl_arg', action='append', nargs=2, default=[])
     # parser.add_argument('-o', '--override', action='append', nargs=2, default=[])
     # parser.add_argument('-model-dir', type=str, required=True)
@@ -149,7 +151,7 @@ if __name__ == '__main__':
     # _is_flow_motion = args.is_flow
     _rosbag = RolloutRosbag(args.rosbag_dir, realtime=False)
     # ensuring no dropped msgs
-    _env = PointMassCrazyflieSimulator(_ros_prefix, 0.1, use_ros=False)
+    _env = PointMassCrazyflieSimulator(_ros_prefix, 0.1, use_ros=False, lag=args.lag)
 
     # _ros_msg_queue_buffer = dict()
 
@@ -185,7 +187,7 @@ if __name__ == '__main__':
         _rosbag.open(list(_ros_topics_and_types.keys()) + list(_ros_global_topics))
 
         _env.reset(target=[random.uniform(0,1), random.uniform(0,1), random.uniform(0,0.5)])
-        _env.run_random_motion(args.niters, render=args.render, realtime=args.render, rosbag=_rosbag)
+        _env.run_random_motion(args.niters, render=args.render, realtime=args.render, rosbag=_rosbag, correlated=not args.uncorrelated)
 
         if args.render:
             input("Press enter to continue: ")

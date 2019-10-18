@@ -47,19 +47,25 @@ class PointMassCrazyflieSimulator:
     Y_RANGE = (0.,1.)
     Z_RANGE = (0.,0.5)
 
-    def __init__(self, ros_prefix, dt, use_ros=True, queue_size=10):
+    VISUAL_HIST_LEN = 500
+
+    def __init__(self, ros_prefix, dt, use_ros=True, queue_size=10, lag=0, clip=True, with_figure=True):
         self.dt = dt
         self.use_ros = use_ros
         self.ros_prefix = ros_prefix
+        assert lag >= 0
+        self.lag = lag
+        self._clip = clip
 
         if self.use_ros:
             self.motion_pub = rospy.Publisher(ros_prefix + "motion", CFMotion, queue_size=queue_size)
             self.target_pub = rospy.Publisher("extcam/target_vector", Vector3Stamped, queue_size=queue_size)
 
-        self.fig = plt.figure(figsize=(16,8))
-        self.ax = self.fig.add_subplot(111)
-        self.ax.set_xlim(0,1)
-        self.ax.set_ylim(1,0)
+        if with_figure:
+            self.fig = plt.figure(figsize=(16,8))
+            self.ax = self.fig.add_subplot(111)
+            self.ax.set_xlim(0,1)
+            self.ax.set_ylim(1,0)
         # self.plot_elem, = self.ax.plot([], [])
         self.reset()
 
@@ -77,8 +83,16 @@ class PointMassCrazyflieSimulator:
             self.target_state.vector.y = 0.5
             self.target_state.vector.z = 0.01
 
-        self.x_history = []
-        self.y_history = []
+        # state buffer, top corresponds to next state
+        self.state_buffer = [copy.deepcopy(self.target_state) for _ in range(self.lag)]
+
+        return self.target_state
+
+    def get_obs(self):
+        if self.lag > 0:
+            return copy.deepcopy(self.state_buffer[0])
+        else:
+            return copy.deepcopy(self.target_state)
 
     def clip(self, val, low, up):
         return max(low, min(val, up))
@@ -88,16 +102,24 @@ class PointMassCrazyflieSimulator:
             dt = self.dt
 
         # state update (x = vx * dy)
-        self.target_state.vector.x = self.clip(self.target_state.vector.x + action.x * dt, self.X_RANGE[0], self.X_RANGE[1])
-        self.target_state.vector.y = self.clip(self.target_state.vector.y + action.dz * dt, self.Y_RANGE[0], self.Y_RANGE[1])
-        self.target_state.vector.z = self.clip(self.target_state.vector.z + action.y * dt, self.Z_RANGE[0], self.Z_RANGE[1])
 
-        self.x_history.append(self.target_state.vector.x)
-        self.y_history.append(self.target_state.vector.y)
+        # no clip (temporary)
+        if self._clip:
+            self.target_state.vector.x = self.clip(self.target_state.vector.x + action.x * dt, self.X_RANGE[0], self.X_RANGE[1])
+            self.target_state.vector.y = self.clip(self.target_state.vector.y + action.dz * dt, self.Y_RANGE[0], self.Y_RANGE[1])
+            self.target_state.vector.z = self.clip(self.target_state.vector.z + action.y * dt, self.Z_RANGE[0], self.Z_RANGE[1])
+        else:
+            self.target_state.vector.x += action.x * dt
+            self.target_state.vector.y += action.dz * dt
+            self.target_state.vector.z += action.y * dt
 
-        return self.target_state
+        self.state_buffer.append(copy.deepcopy(self.target_state))
+        # self.x_history.append(self.target_state.vector.x)
+        # self.y_history.append(self.target_state.vector.y)
 
-    def run_random_motion(self, niter, render=False, realtime=False, rosbag=None):
+        return self.state_buffer.pop(0)
+
+    def run_random_motion(self, niter, render=False, correlated=True, realtime=False, rosbag=None):
 
         if rosbag:
             start_time = rospy.Time.now().to_sec()
@@ -110,26 +132,36 @@ class PointMassCrazyflieSimulator:
             print("Rendering...")
             self.ax.cla()
 
+        self.x_history = [self.get_obs().vector.x]
+        self.y_history = [self.get_obs().vector.y]
+
         while i < niter and not rospy.is_shutdown():
 
-            self.action.x = self.clip(self.action.x + random.uniform(-1, 1) * 0.2 * self.dt, -VX_SCALE, VX_SCALE)
-            self.action.y = self.clip(self.action.y + random.uniform(-1, 1) * 0.2 * self.dt, -VX_SCALE, VX_SCALE)
-            self.action.dz = self.clip(self.action.dz + random.uniform(-1, 1) * 0.1 * self.dt, -THROTTLE_SCALE, THROTTLE_SCALE)
-            
+            if correlated:
+                self.action.x = self.clip(self.action.x + random.uniform(-1, 1) * 0.2 * self.dt, -VX_SCALE, VX_SCALE)
+                self.action.y = self.clip(self.action.y + random.uniform(-1, 1) * 0.2 * self.dt, -VX_SCALE, VX_SCALE)
+                self.action.dz = self.clip(self.action.dz + random.uniform(-1, 1) * 0.1 * self.dt, -THROTTLE_SCALE, THROTTLE_SCALE)
+            else:
+                self.action.x = random.uniform(-VX_SCALE, VX_SCALE)
+                self.action.y = random.uniform(-VX_SCALE, VX_SCALE)
+                self.action.dz = random.uniform(-THROTTLE_SCALE, THROTTLE_SCALE)
+
             tol = 1e-5
 
-            if self.action.x < tol and self.target_state.vector.x < self.X_RANGE[0] + 0.0001:
+            cur_obs = self.get_obs()
+
+            if self.action.x < tol and cur_obs.vector.x < self.X_RANGE[0] + 0.0001:
                 self.action.x = abs(self.action.x) / 2
-            if self.action.dz < tol and self.target_state.vector.y < self.Y_RANGE[0] + 0.0001:
+            if self.action.dz < tol and cur_obs.vector.y < self.Y_RANGE[0] + 0.0001:
                 self.action.dz = abs(self.action.dz) / 2
-            if self.action.y < tol and self.target_state.vector.z < self.Z_RANGE[0] + 0.0001:
+            if self.action.y < tol and cur_obs.vector.z < self.Z_RANGE[0] + 0.0001:
                 self.action.y = abs(self.action.y) / 2
 
-            if self.action.x > - tol and self.target_state.vector.x > self.X_RANGE[1] - 0.0001:
+            if self.action.x > - tol and cur_obs.vector.x > self.X_RANGE[1] - 0.0001:
                 self.action.x = - abs(self.action.x) / 2
-            if self.action.dz > - tol and self.target_state.vector.y > self.Y_RANGE[1] - 0.0001:
+            if self.action.dz > - tol and cur_obs.vector.y > self.Y_RANGE[1] - 0.0001:
                 self.action.dz = - abs(self.action.dz) / 2
-            if self.action.y > - tol and self.target_state.vector.z > self.Z_RANGE[1] - 0.0001:
+            if self.action.y > - tol and cur_obs.vector.z > self.Z_RANGE[1] - 0.0001:
                 self.action.y = - abs(self.action.y) / 2
 
             if rosbag:
@@ -139,20 +171,26 @@ class PointMassCrazyflieSimulator:
 
             # unique
             ac = copy.deepcopy(self.action)
-            ts = copy.deepcopy(self.target_state)
             ac.stamp.stamp = rospy.Time(self._time.secs, self._time.nsecs)
-            ts.header.stamp = rospy.Time(self._time.secs, self._time.nsecs)
+            cur_obs.header.stamp = rospy.Time(self._time.secs, self._time.nsecs)
 
             if self.use_ros:
                 self.motion_pub.publish(ac)
-                self.target_pub.publish(ts)
+                self.target_pub.publish(cur_obs)
 
             if rosbag:
-                rosbag.write("extcam/target_vector", ts, ts.header.stamp)
+                rosbag.write("extcam/target_vector", cur_obs, cur_obs.header.stamp)
                 rosbag.write(self.ros_prefix + "motion", ac, ac.stamp.stamp)
                 rosbag._rosbag.flush()
 
-            self.step(self.action, self.dt)
+            next_obs = self.step(self.action, self.dt)
+
+            self.x_history.append(next_obs.vector.x)
+            self.y_history.append(next_obs.vector.y)
+
+            if len(self.x_history) > self.VISUAL_HIST_LEN:
+                self.x_history.pop(0)
+                self.y_history.pop(0)
 
             i += 1
 
