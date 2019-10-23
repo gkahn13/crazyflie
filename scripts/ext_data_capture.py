@@ -15,6 +15,7 @@ from crazyflie.msg import CFData, CFMotion, CFCommand
 from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import CompressedImage, Imu, Joy
 from std_msgs.msg import Bool
+from visualization_msgs.msg import Marker
 
 
 THROTTLE_AXIS = 1 # up 1
@@ -208,6 +209,10 @@ if __name__ == '__main__':
         (_ros_prefix + 'coll', Bool),
         ('extcam/image', CompressedImage),
         ('extcam/target_vector', Vector3Stamped),
+        ('mpc/trajectory_marker', Marker),
+        ('mpc/action_vector', Vector3Stamped),
+        ('mpc/action_marker', Marker),
+        ('mpc/goal_vector', Vector3Stamped),
         # ('/joy', Joy),
     ]
 

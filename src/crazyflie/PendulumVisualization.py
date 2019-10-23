@@ -45,6 +45,7 @@ class PendulumVisualization:
         self.latest_action = None
         self.latest_ext_img = None
         self.latest_traj_markers = [None] * self._num_trajectories
+        self.latest_ac_marker = None # rollout of best action seq
         self.latest_goal_vector = None
         self.latest_target_vector = None
 
@@ -59,6 +60,7 @@ class PendulumVisualization:
 
         self.marker_sub = rospy.Subscriber('mpc/trajectory_marker', Marker, self.marker_cb)
         self.action_sub = rospy.Subscriber('mpc/action_vector', Vector3Stamped, self.action_cb)
+        self.ac_marker_sub = rospy.Subscriber('mpc/action_marker', Marker, self.ac_marker_cb)
         self.goal_sub = rospy.Subscriber('mpc/goal_vector', Vector3Stamped, self.goal_vector_cb)
 
         #need to facilitate a set of publishers per cf node
@@ -73,10 +75,13 @@ class PendulumVisualization:
     def setup_figure(self):
         # Attaching 3D axis to the figure
         self.fig = plt.figure(figsize=(16,8))
-        self.gs = gridspec.GridSpec(ncols=2, nrows=1, figure=self.fig)
+        self.gs = gridspec.GridSpec(ncols=3, nrows=3, figure=self.fig)
 
-        self.axImg = self.fig.add_subplot(self.gs[0,0])
-        self.ax3D = self.fig.add_subplot(self.gs[0,1], projection='3d')
+        self.axImg = self.fig.add_subplot(self.gs[:,0])
+        self.ax3D = self.fig.add_subplot(self.gs[:2,1], projection='3d')
+        self.ax_updown = self.fig.add_subplot(self.gs[0,2])
+        self.ax_leftright = self.fig.add_subplot(self.gs[1,2])
+        self.ax_forwardback = self.fig.add_subplot(self.gs[2,2])
 
         # Setting the Image axes properties
         self.axImg.set_axis_off()
@@ -96,10 +101,25 @@ class PendulumVisualization:
         self.ax3D.view_init(azim=0)
         self.ax3D.scatter([0], [0], [0], marker='+', color='green') # origin
 
-        self.ani = animation.FuncAnimation(self.fig, self.update_figure, interval=50)
+        self.ax_updown.set_title("Up Down") # vertical
+        self.ax_updown.set_ylim([-.1, .1])
 
+        self.ax_leftright.set_title("Left Right") # horizontal
+        self.ax_leftright.set_xlim([-1., 1.])
+
+        self.ax_forwardback.set_title("Forward Back")
+        self.ax_forwardback.set_ylim([-1., 1.]) # vertical
+
+        self.ani = animation.FuncAnimation(self.fig, self.update_figure, blit=False, repeat=False, interval=80)
+
+        # objects
         self.img = None
         self.quiv = self.ax3D.quiver([0], [0], [0], [0], [0], [0], color='red')
+
+        self.updown_barv = None
+        self.leftright_barh = None
+        self.forwardback_barv = None
+        # import ipdb; ipdb.set_trace()
 
         plt.show()
 
@@ -159,6 +179,31 @@ class PendulumVisualization:
             # coordinate system (x forward) (y left) (z up)
             self.quiv.set_segments([[[0,0,0], [self.latest_action.vector.x, self.latest_action.vector.y, self.latest_action.vector.z]]])
 
+        if self.latest_ac_marker is not None:
+            # each is a vector of the action seq
+            # coordinate system (x forward) (y left) (z up)
+            ud = []
+            lr = []
+            fb = []
+            for ac in self.latest_ac_marker.points:
+                ud.append(ac.z)
+                lr.append(ac.y)
+                fb.append(ac.x)
+
+            H = len(ud)
+            if self.updown_barv is None:
+                print("Creating bars")
+                self.updown_barv = self.ax_updown.bar(list(range(H)), ud)
+                self.leftright_barh = self.ax_leftright.barh(list(range(H)), lr)
+                self.forwardback_barv = self.ax_forwardback.bar(list(range(H)), fb)
+            else:
+                for i in range(H):
+                    self.updown_barv[i].set_height(ud[i])
+                    self.leftright_barh[i].set_width(lr[i])
+                    self.forwardback_barv[i].set_height(fb[i])
+
+        # print(time.time())
+
     # min cost is green, the rest are various shades of white on a log scale
     def map_costs_to_colors(self, cost_list):
         color_list = [(255,255,255) for _ in range(len(cost_list))]
@@ -194,6 +239,10 @@ class PendulumVisualization:
             if msg.id >= self._num_trajectories:
                 raise Exception("Marker denotes a trajectory with id at least num_trajectories (%d >= %d)" % (msg.id, self._num_trajectories))
             self.latest_traj_markers[msg.id] = msg
+
+    def ac_marker_cb(self, msg):
+        if msg.type == Marker.LINE_STRIP:
+            self.latest_ac_marker = msg
 
     def ext_image_cb(self, msg):
         self.latest_ext_img = msg

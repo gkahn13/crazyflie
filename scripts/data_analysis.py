@@ -18,9 +18,8 @@ if __name__ == "__main__":
     # parser.add_argument('-en', '--env', type=str, required=True)
     parser.add_argument('-nb', type=int, required=True, help='Number of bins for each state dim for conditional actions')
     parser.add_argument('-s', '--savefolder', type=str, default='', help='Store all plots to this directory [\'\']')
-    parser.add_argument('-sp', '--saveprefix', type=str, default='closed_loop_plot_', help='Prefix to prepend to output plots')
+    parser.add_argument('-sp', '--saveprefix', type=str, default='dataset_', help='Prefix to prepend to output plots')
     parser.add_argument('-hd', '--hide', action='store_true', help='hide plots')
-    parser.add_argument('-sa', '--sample_sorted', action='store_true', help='sample k evenly across worst to best rollouts to visualize, otherwise use k best')
 
     args = parser.parse_args()
 
@@ -46,16 +45,21 @@ if __name__ == "__main__":
     last_range = np.amin(obs, axis=0)
 
     for bn in range(args.nb):
-        fi, axsi = plt.subplots(obs.shape[1], acs.shape[1], tight_layout=True, figsize=(3 * obs.shape[1], 3 * acs.shape[1]))
+        fi, axsi = plt.subplots(obs.shape[1], acs.shape[1], tight_layout=True, figsize=(4 * obs.shape[1], 4 * acs.shape[1]))
         next_range = last_range + bin_obs_ranges
         fi.suptitle("Range %s -> %s" % (str(last_range), str(next_range)))
         for obdim in range(obs.shape[1]):
             idx_range = sorted_dims[bn * bin_size : (bn+1) * bin_size, obdim]
             for acdim in range(acs.shape[1]):
+                axsi[obdim, acdim].set_title("obsdim: %d, acdim %d" % (obdim, acdim), size=16, y=1.12)
                 axsi[obdim, acdim].hist(acs[idx_range, acdim])
                 axsi[obdim, acdim].hist(acs[idx_range, acdim])
                 # axsi[obdim, acdim].plot(acs[:, acdim])
         last_range = next_range
+
+        if args.savefolder != '':
+            suff = "cond_ac_hists_i_%d_nb_%d.png" % (bn, args.nb)
+            fi.savefig(os.path.join(args.savefolder, args.saveprefix + suff))
 
     f2, axs2 = plt.subplots(1 + acs.shape[1], 1, tight_layout=True, figsize=(10,10))
     # first plot rollouts
@@ -66,10 +70,7 @@ if __name__ == "__main__":
         axs2[1 + i].hist(acs[:, i])
 
     if args.savefolder != '':
-        suff = "k_%d.png" % (args.k)
-        f.savefig(os.path.join(args.savefolder, args.saveprefix + suff))
-
-        suff = "rollouts.png"
+        suff = "overall_hists.png"
         f2.savefig(os.path.join(args.savefolder, args.saveprefix + suff))
 
     if not args.hide:
