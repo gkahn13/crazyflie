@@ -16,7 +16,7 @@ from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import CompressedImage, Imu, Joy
 from std_msgs.msg import Bool
 from visualization_msgs.msg import Marker
-
+from crazyflie.utils import MasterSigController, STOP, START
 
 THROTTLE_AXIS = 1 # up 1
 ROLL_AXIS = 2 #left 1
@@ -160,6 +160,7 @@ if __name__ == '__main__':
     parser.add_argument('--no-action-noise', action='store_true')
     parser.add_argument('--action-bounding', action='store_true')
     parser.add_argument('--enable-yaw', action='store_true')
+    parser.add_argument('--policy', type=str, help='policy to use for data collection (teleop or mpc) [teleop]', default="teleop")
     # parser.add_argument('-ca', '--ctrl_arg', action='append', nargs=2, default=[])
     # parser.add_argument('-o', '--override', action='append', nargs=2, default=[])
     # parser.add_argument('-model-dir', type=str, required=True)
@@ -194,6 +195,8 @@ if __name__ == '__main__':
     _joy_estop_trash_btn_pressed = False
     _joy_estop_pause_btn_pressed = False
 
+    _master = MasterSigController(_ros_prefix)
+
     _ros_msg_times = dict()
     _ros_msg_queue = dict()
     # _ros_msg_queue_buffer = dict()
@@ -213,6 +216,7 @@ if __name__ == '__main__':
         ('mpc/action_vector', Vector3Stamped),
         ('mpc/action_marker', Marker),
         ('mpc/goal_vector', Vector3Stamped),
+        ('mpc/reward_vector', Vector3Stamped),
         # ('/joy', Joy),
     ]
 
@@ -355,8 +359,10 @@ if __name__ == '__main__':
         rate = rospy.Rate(10)
         while not rospy.is_shutdown():
 
-            _curr_motion.stamp.stamp = rospy.Time.now()
-            _motion_pub.publish(_curr_motion)
+            # don't publish motion if there is an active policy
+            if not (args.policy == 'mpc' and _rosbag.is_open):
+                _curr_motion.stamp.stamp = rospy.Time.now()
+                _motion_pub.publish(_curr_motion)
 
                 # drop things into the rosbag
                 # _queue_lock.acquire()
@@ -462,17 +468,31 @@ if __name__ == '__main__':
 
     while True:
 
-        print('## Waiting for active topics.')
+        print('## Waiting for active topics...')
 
         while not _ros_is_good(display=False):
             pass
 
+        print("## Waiting for target to be in frame...")
+        rate = rospy.Rate(10)
+        vec = _ros_msg_queue['extcam/target_vector'].vector
+        while (vec.x < 1e-4 and vec.y < 1e-4):
+            vec = _ros_msg_queue['extcam/target_vector'].vector
+            rate.sleep()
+
         _adjustment_period = True
-        print('## Waiting for Start Button.')
+        print('## Waiting for Start Button...')
         while not _is_btn(_joy_start_btn):
             pass
         _adjustment_period = False
-            
+
+        # waiting for policy to be up
+        if args.policy == 'mpc':
+            _master.reset_sig() # forcing no signal received yet
+            print('## Waiting for MPC Ack...')
+            # sends in while loop every second, checks every 100ms
+            _master.wait_send_sig(START, rate=rospy.Rate(10), resend=10)
+
         print('## Beginning Episode.')
 
         # _rosbag_lock.acquire()
@@ -486,13 +506,14 @@ if __name__ == '__main__':
         save = False
 
         #### START ITERATION
-        rate = rospy.Rate(40)
+        rate = rospy.Rate(10)
         while   (
                     not _is_collision and
                     not _joy_stop_trash_btn_pressed and
                     not _joy_stop_save_btn_pressed and
                     not _joy_estop_trash_btn_pressed and
-                    not _joy_estop_pause_btn_pressed
+                    not _joy_estop_pause_btn_pressed and
+                    not (args.policy == 'mpc' and _master.sender_stopped()) # servant send a kill request
                 ):
             # _rosbag_lock.acquire()
 
@@ -512,8 +533,9 @@ if __name__ == '__main__':
 
 
         #### END ITERATION
+        mpc_save = args.policy == 'mpc' and _master.sender_stopped() # todo add max iters
 
-        if _joy_stop_save_btn_pressed:
+        if _joy_stop_save_btn_pressed or mpc_save:
             print("## Saving Rollout as", _rosbag._output_bag_name)
             save = True
         else:
@@ -525,6 +547,13 @@ if __name__ == '__main__':
         else:
             _rosbag.trash()
         # _rosbag_lock.release()
+        # acknowledge the stop if we forced one
+        if args.policy == 'mpc':
+            _master.send_sig(STOP)
+            # wait for ack only if we were the senders of STOP
+            if not _master.sender_stopped():
+                _master.reset_sig()
+                _master.wait_sig(STOP, rate=rospy.Rate(10))
 
         if _joy_estop_pause_btn_pressed or _joy_estop_trash_btn_pressed:
             cmd = CFCommand()
@@ -533,7 +562,6 @@ if __name__ == '__main__':
 
             _cmd_pub.publish(cmd)
             time.sleep(2.0)
-
 
         if _joy_estop_pause_btn_pressed:
             print('## Paused. Waiting for Start Button.')

@@ -8,7 +8,7 @@ from crazyflie.msg import CFMotion
 
 from sensor_msgs.msg import Joy
 
-from crazyflie import Controller
+from crazyflie.controller import Controller
 
 import signal
 

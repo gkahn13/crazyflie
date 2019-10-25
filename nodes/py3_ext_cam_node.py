@@ -4,7 +4,7 @@ import sys
 # import os
 import rospy
 
-from crazyflie import ExternalCamera
+from crazyflie.external_camera import ExternalCamera
 
 import logging
 # Only output errors from the logging framework

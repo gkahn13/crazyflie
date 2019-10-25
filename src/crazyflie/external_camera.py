@@ -137,9 +137,12 @@ class ExternalCamera:
         lowBoundRGB = (0, 100, 0)
         highBoundRGB = (150, 255, 150)
 
-        # orange
-        lowBoundHSV = (1, 175, 20)
-        highBoundHSV = (18, 255, 255)
+        # orange (low light)
+        # lowBoundHSV = (1, 175, 20)
+        # highBoundHSV = (18, 255, 255)
+        # config 2 (high light)
+        lowBoundHSV = (1, 140, 20)
+        highBoundHSV = (26, 255, 255)
         # first blur to remove high frequency noise
 
         imblur = cv2.GaussianBlur(image, (7, 7), 0)

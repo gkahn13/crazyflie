@@ -4,7 +4,7 @@ import rospy
 import sys
 import os
 
-from crazyflie import Controller
+from crazyflie.controller import Controller
 
 
 if __name__ == '__main__':

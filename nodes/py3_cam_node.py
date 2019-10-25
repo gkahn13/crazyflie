@@ -3,7 +3,7 @@
 import sys
 import rospy
 
-from crazyflie import Camera
+from crazyflie.camera import Camera
 
 import logging
 # Only output errors from the logging framework

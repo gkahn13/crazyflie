@@ -4,7 +4,7 @@ import rospy
 import os
 import sys
 
-from crazyflie import Crazyflie
+from crazyflie.cf import Crazyflie
 
 import logging
 # Only output errors from the logging framework

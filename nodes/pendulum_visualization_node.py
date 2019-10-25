@@ -4,7 +4,7 @@ import rospy
 import os
 import sys
 
-from crazyflie import PendulumVisualization
+from crazyflie.pendulum_visualization import PendulumVisualization
 
 import logging
 # Only output errors from the logging framework
