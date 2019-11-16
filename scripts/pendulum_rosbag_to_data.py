@@ -14,11 +14,13 @@ def make_parser():
     parser = argparse.ArgumentParser(description='script to read and combine rosbag data',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-l','--input_list', nargs='+', help='list of input rosbags', required=True)
+    parser.add_argument('-lv','--latent_var', type=float, help='latent var for this episode', required=True)
     parser.add_argument('-o', '--output_file', type=str, default='rosbag_data.mat',
                         help='output file for storing mat data')
     parser.add_argument('-n', '--normalize', action='store_true', help='normalize rosbag states to known pixel width, height, and max area')
     parser.add_argument('-nc', type=int, help='how many correlation components to show', default=2)
     parser.add_argument('-c', '--correlate', action='store_true', help='plot correlation of rosbag states')
+    parser.add_argument('-rew', '--rewards', action='store_true', help='sum episode rewards in bag if present')
     parser.add_argument('-v', '--validation_frac', type=float, help='validation size fraction', default=0.)
     parser.add_argument('-al', '--artificial_lag', type=int, help='how many time steps to delay actions', default=0)
     # parser.add_argument('-p', '--ros_prefix', type=str, default='',
@@ -28,6 +30,9 @@ def make_parser():
 def bag_and_save(args, train):
 
     topics = ['target_vector', 'motion']
+    if args.rewards:
+        topics += ['reward_vector']
+
     def get_intersecting_topics(bag_topics):
         final_topics = []
         for t in bag_topics:
@@ -38,6 +43,7 @@ def bag_and_save(args, train):
         return final_topics
 
     states, acs = [], []
+    latent = []
     state = np.zeros(3)
     ac = np.zeros(3)
     last_n_acs = []
@@ -47,6 +53,10 @@ def bag_and_save(args, train):
     act_state_time_diffs = []
     state_counts = []
     episode_sizes = []
+    all_rewards = []
+    ep_rewards = []
+    ep_end_rewards = []
+    failed_ep = []
 
     if args.normalize:
         print("Normalizing on")
@@ -71,6 +81,7 @@ def bag_and_save(args, train):
         prev_state_time = None
         prev_state = None
         prev_save_time = None
+        cur_rew = np.zeros(3)
 
         print("Reading:", filename)
 
@@ -90,6 +101,8 @@ def bag_and_save(args, train):
 
         i = 0
         tmp_state_count = 0
+
+        sum_rewards = np.zeros(3)
 
         tuples = {}
         for rt in relevant_topics:
@@ -152,6 +165,7 @@ def bag_and_save(args, train):
                         # append action and latest state
                         states.append(np.copy(state))
                         acs.append(np.copy(r_ac))
+                        latent.append(np.array([args.latent_var]))
 
                         state_counts.append(tmp_state_count)
 
@@ -164,10 +178,23 @@ def bag_and_save(args, train):
                         i += 1
                         prev_state = states[-1]
 
+                        all_rewards.append(np.copy(cur_rew))
+
                     prev_time = msg_time
                     tmp_state_count = 0
 
+            elif 'reward_vector' in topic:
+                vec = msg.vector
+                cur_rew = np.array([vec.x, vec.y, vec.z])
+                sum_rewards += cur_rew # episode rewards
+
         episode_sizes.append(i)
+        ep_rewards.append(sum_rewards)
+        ep_end_rewards.append(all_rewards[-1])
+        if state[0] < 1e-6 and state[1] < 1e-6: # (failed episode)
+            failed_ep.append(np.ones((1,)))
+        else:
+            failed_ep.append(np.zeros((1,)))
 
                 # if prev_save_time:
                 #     print('Time since last bag', (prev_time-prev_save_time)/1e9)
@@ -181,20 +208,34 @@ def bag_and_save(args, train):
     state_counts_np = np.stack(state_counts)
     states_np = np.stack(states)
     acs_np = np.stack(acs)
+    latent_np = np.stack(latent)
     episode_sizes_np = np.stack(episode_sizes)
+    all_rewards_np = np.stack(all_rewards)
+    ep_rewards_np = np.stack(ep_rewards)
+    ep_end_rewards_np = np.stack(ep_end_rewards)
+    failed_ep_np = np.stack(failed_ep)
     # _np = np.stack()
 
     assert np.sum(episode_sizes_np) == states_np.shape[0]
 
     # stats
-    asd_dist = (np.mean(act_state_time_diffs_np, axis=0), np.std(act_state_time_diffs_np, axis=0))
-    td_dist = (np.mean(time_diffs_np, axis=0), np.std(time_diffs_np, axis=0))
+    asd_dist = (np.mean(act_state_time_diffs_np), np.std(act_state_time_diffs_np))
+    td_dist = (np.mean(time_diffs_np), np.std(time_diffs_np))
     sd_dist = (np.mean(state_diffs_np, axis=0), np.std(state_diffs_np, axis=0))
     sc_dist = (np.mean(state_counts_np, axis=0), np.std(state_counts_np, axis=0))
     s_dist = (np.mean(states_np, axis=0), np.std(states_np, axis=0))
     a_dist = (np.mean(acs_np, axis=0), np.std(acs_np, axis=0))
-    e_dist = (np.mean(episode_sizes_np, axis=0), np.std(episode_sizes_np, axis=0))
-    e_mm = (np.amin(episode_sizes_np, axis=0), np.amax(episode_sizes_np, axis=0))
+    e_dist = (np.mean(episode_sizes_np), np.std(episode_sizes_np))
+    e_mm = (np.amin(episode_sizes_np), np.amax(episode_sizes_np))
+
+    rew_dist = (np.mean(all_rewards_np, axis=0), np.std(all_rewards_np, axis=0))
+    rew_mm = (np.amin(all_rewards_np, axis=0), np.amax(all_rewards_np, axis=0))
+
+    ep_rew_dist = (np.mean(ep_rewards_np, axis=0), np.std(ep_rewards_np, axis=0))
+    ep_rew_mm = (np.amin(ep_rewards_np, axis=0), np.amax(ep_rewards_np, axis=0))
+
+    ep_end_rew_dist = (np.mean(ep_end_rewards_np, axis=0), np.std(ep_end_rewards_np, axis=0))
+    ep_end_rew_mm = (np.amin(ep_end_rewards_np, axis=0), np.amax(ep_end_rewards_np, axis=0))
 
     # normalized
     states_normalized = np.divide(states - s_dist[0], s_dist[1])
@@ -212,6 +253,12 @@ def bag_and_save(args, train):
     print("#############################################################")
     print("## State distribution (mu, sig): (%s, %s)" % s_dist)
     print("## Act distribution (mu, sig): (%s, %s)" % a_dist)
+    print("## All Reward distribution (mu, sig): (%s, %s)" % rew_dist)
+    print("## All Reward distribution (min, max): (%s, %s)" % rew_mm)
+    print("## Episode Reward distribution (mu, sig): (%s, %s)" % ep_rew_dist)
+    print("## Episode Reward distribution (min, max): (%s, %s)" % ep_rew_mm)
+    print("## End Reward distribution (mu, sig): (%s, %s)" % ep_end_rew_dist)
+    print("## End Reward distribution (min, max): (%s, %s)" % ep_end_rew_mm)
     print("#############################################################")
 
     file_name = args.output_file
@@ -222,14 +269,25 @@ def bag_and_save(args, train):
     print("Saving to file: %s" % file_name)
 
     savemat(file_name, {
-        'obs': states_np, 
-        'acs': acs_np, 
-        'diffs': time_diffs_np, 
+        'obs': states_np,
+        'acs': acs_np,
+        'rewards': all_rewards_np,
+        'latent': latent_np,
+        'ep_rewards': ep_rewards_np,
+        'ep_end_rewards': ep_end_rewards_np,
+        'diffs': time_diffs_np,
         'state_diffs': state_diffs_np,
         'ac_state_time_diffs': act_state_time_diffs_np,
         'episode_sizes': episode_sizes_np,
         'state_dist': s_dist,
         'ac_dist': a_dist,
+        'rew_dist': rew_dist,
+        'rew_mm': rew_mm,
+        'ep_rew_dist': ep_rew_dist,
+        'ep_rew_mm': ep_rew_mm,
+        'ep_end_rew_dist': ep_end_rew_dist,
+        'ep_end_rew_mm': ep_end_rew_mm,
+        'failed_ep': failed_ep_np,
     })
 
 

@@ -22,6 +22,7 @@ if __name__ == '__main__':
     id_param = rospy.search_param('id')
     traj_param = rospy.search_param('num_trajectories')
     is_raw_param = rospy.search_param('is_raw')
+    dt_param = rospy.search_param('dt')
     # uri_param = rospy.search_param('uri')
     # data_only_param = rospy.search_param('data_only')
     # motion_param = rospy.search_param('motion')
@@ -45,6 +46,12 @@ if __name__ == '__main__':
     else:
         num_trajectories = int(rospy.get_param(traj_param, '1'))
 
+    if not dt_param:
+        print("No dt specified. Default is 0.1")
+        dt = 0.1
+    else:
+        dt = float(rospy.get_param(dt_param, '0.1'))
+
 
     # URI = rospy.get_param(uri_param, DEFAULT_URI)
     # data_only = bool(rospy.get_param(data_only_param, DEFAULT_URI))
@@ -58,5 +65,5 @@ if __name__ == '__main__':
  #    ID = int(rospy.get_param('id', '0'))
  #    URI = rospy.get_param('uri', DEFAULT_URI)
 
-    pv = PendulumVisualization(ID, is_raw, num_trajectories)
+    pv = PendulumVisualization(ID, dt, is_raw, num_trajectories)
     pv.run()

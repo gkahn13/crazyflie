@@ -10,6 +10,7 @@ import time
 import threading
 import subprocess, shlex
 import signal
+from noise import OUNoise, StepNoise
 
 from crazyflie.msg import CFData, CFMotion, CFCommand
 from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
@@ -29,22 +30,27 @@ DZ_INCREMENT = 0.02
 DT = 0.1
 
 #RP motion
-THROTTLE_SCALE = 0.05
+THROTTLE_SCALE = 0.1
 ROLL_SCALE = -25
 PITCH_SCALE = -25
 YAW_SCALE = -120
 
 ROLL_CLIP = abs(ROLL_SCALE) * 0.4
 PITCH_CLIP = abs(PITCH_SCALE) * 0.1
-THROTTLE_CLIP = abs(THROTTLE_SCALE) * 0.2
+THROTTLE_CLIP = abs(THROTTLE_SCALE) * 0.1
 
 #standard motion
 VX_SCALE = 0.5
 VY_SCALE = 0.5
 
 # arbitrary 8% of max is the std dev of noise 
-VXY_NOISE_STD = abs(VX_SCALE) * 0.30 # variance 30% of max speed
-VZ_NOISE_STD = abs(THROTTLE_SCALE) * 0.2 * DT # variance 20% of max throttle speed
+VXY_NOISE = abs(VX_SCALE) * 0.7 # uniform
+VZ_NOISE = abs(THROTTLE_SCALE) * 0.2 * DT # variance 20% of max throttle speed
+
+
+noise_vx = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VX_SCALE, 0.1*VX_SCALE], range=[-0.5*VX_SCALE, 0.5*VX_SCALE])
+noise_vy = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VY_SCALE, 0.1*VY_SCALE], range=[-0.5*VY_SCALE, 0.5*VY_SCALE])
+noise_dz = StepNoise(reset_step_range=[1, 3], step_range=[-0.3*THROTTLE_CLIP, 0.3*THROTTLE_CLIP], range=[-0.6*THROTTLE_CLIP, 0.6*THROTTLE_CLIP])
 
 class RolloutRosbag:
     def __init__(self, rosbag_dir):
@@ -161,6 +167,7 @@ if __name__ == '__main__':
     parser.add_argument('--action-bounding', action='store_true')
     parser.add_argument('--enable-yaw', action='store_true')
     parser.add_argument('--policy', type=str, help='policy to use for data collection (teleop or mpc) [teleop]', default="teleop")
+    parser.add_argument('--dt', type=float, help='action dt', required=True)
     # parser.add_argument('-ca', '--ctrl_arg', action='append', nargs=2, default=[])
     # parser.add_argument('-o', '--override', action='append', nargs=2, default=[])
     # parser.add_argument('-model-dir', type=str, required=True)
@@ -173,6 +180,8 @@ if __name__ == '__main__':
 
     _rosbag_lock = threading.Lock()
     _queue_lock = threading.Lock()
+
+    _dt = args.dt
     # _buffer_lock = threading.Lock()
 
     _ros_prefix =  args.ros_prefix
@@ -323,30 +332,6 @@ if __name__ == '__main__':
             _curr_motion.dz = _curr_joy.axes[THROTTLE_AXIS] * THROTTLE_SCALE
             _curr_motion.dz = _curr_motion.dz if abs(_curr_motion.dz) > THROTTLE_CLIP else 0
 
-            # adding action noise during recording
-            if not args.no_action_noise and _is_flow_motion:
-                _curr_motion.x += random.random() * VXY_NOISE_STD
-                _curr_motion.y += random.random() * VXY_NOISE_STD
-                _curr_motion.dz += random.random() * VZ_NOISE_STD
-
-            if args.action_bounding:
-                if 'extcam/target_vector' in _ros_msg_queue:
-                    vec = _ros_msg_queue['extcam/target_vector'].vector
-                    if vec.x != 0 or vec.y != 0 or vec.z != 0:
-                        # assumes normalization
-                        nx,ny,ndz = bound_action_by_target_loc(_curr_motion, vec)
-                        _curr_motion.x = nx
-                        _curr_motion.y = ny
-                        _curr_motion.dz = ndz
-
-            # extra bounding for altitude (to make sure CF and alt sensor are in their working range)
-            if _ros_prefix + 'data' in _ros_msg_queue:
-                data = _ros_msg_queue[_ros_prefix + 'data']
-                if data.alt < 0.15 and _curr_motion.dz < 0:# minimum 15 cm off the ground
-                    _curr_motion.dz = 0
-                if data.alt > 1.0 and _curr_motion.dz > 0:# maximum is 1m off the ground
-                    _curr_motion.dz = 0
-
             _curr_motion.is_flow_motion = _is_flow_motion
 
        ## END OF CB
@@ -356,12 +341,42 @@ if __name__ == '__main__':
     def _background_thread():
         global _curr_motion
 
-        rate = rospy.Rate(10)
+        rate = rospy.Rate(1./_dt)
         while not rospy.is_shutdown():
 
             # don't publish motion if there is an active policy
             if not (args.policy == 'mpc' and _rosbag.is_open):
                 _curr_motion.stamp.stamp = rospy.Time.now()
+        
+                # noise and stuff
+                if _rosbag.is_open:
+                    # adding action noise during recording
+                    if not args.no_action_noise and _is_flow_motion:
+                        if abs(_curr_motion.x) < 1e-8:
+                            _curr_motion.x += noise_vx.step() #random.random() * VXY_NOISE_STD
+                        if abs(_curr_motion.y) < 1e-8:
+                            _curr_motion.y += noise_vy.step() #random.random() * VXY_NOISE_STD
+                        if abs(_curr_motion.dz) < 1e8:
+                            _curr_motion.dz += noise_dz.step() #andom.random() * VZ_NOISE_STD
+
+                    if args.action_bounding:
+                        if 'extcam/target_vector' in _ros_msg_queue:
+                            vec = _ros_msg_queue['extcam/target_vector'].vector
+                            if vec.x != 0 or vec.y != 0 or vec.z != 0:
+                                # assumes normalization
+                                nx,ny,ndz = bound_action_by_target_loc(_curr_motion, vec)
+                                _curr_motion.x = nx
+                                _curr_motion.y = ny
+                                _curr_motion.dz = ndz
+
+                    # extra bounding for altitude (to make sure CF and alt sensor are in their working range)
+                    if (_ros_prefix + 'data') in _ros_msg_queue and _ros_msg_queue[_ros_prefix + 'data'] is not None:
+                        data = _ros_msg_queue[_ros_prefix + 'data']
+                        if data.alt < 0.2 and _curr_motion.dz < 0:# minimum 15 cm off the ground
+                            _curr_motion.dz = 0
+                        if data.alt > 1.0 and _curr_motion.dz > 0:# maximum is 1m off the ground
+                            _curr_motion.dz = 0
+
                 _motion_pub.publish(_curr_motion)
 
                 # drop things into the rosbag
@@ -438,6 +453,11 @@ if __name__ == '__main__':
                     return False
         return True
 
+    def _target_in_frame():
+        vec = _ros_msg_queue['extcam/target_vector'].vector
+        return not (vec.x < 1e-4 and vec.y < 1e-4)
+
+
        ## END OF HELPER
 
     for topic, type in _ros_topics_and_types.items():
@@ -466,6 +486,8 @@ if __name__ == '__main__':
 
     time.sleep(5.0)
 
+
+
     while True:
 
         print('## Waiting for active topics...')
@@ -475,9 +497,7 @@ if __name__ == '__main__':
 
         print("## Waiting for target to be in frame...")
         rate = rospy.Rate(10)
-        vec = _ros_msg_queue['extcam/target_vector'].vector
-        while (vec.x < 1e-4 and vec.y < 1e-4):
-            vec = _ros_msg_queue['extcam/target_vector'].vector
+        while not _target_in_frame():
             rate.sleep()
 
         _adjustment_period = True
@@ -513,6 +533,7 @@ if __name__ == '__main__':
                     not _joy_stop_save_btn_pressed and
                     not _joy_estop_trash_btn_pressed and
                     not _joy_estop_pause_btn_pressed and
+                    not (args.policy != 'mpc' and not _target_in_frame()) and # end rollout if we went out of frame
                     not (args.policy == 'mpc' and _master.sender_stopped()) # servant send a kill request
                 ):
             # _rosbag_lock.acquire()
@@ -535,7 +556,19 @@ if __name__ == '__main__':
         #### END ITERATION
         mpc_save = args.policy == 'mpc' and _master.sender_stopped() # todo add max iters
 
-        if _joy_stop_save_btn_pressed or mpc_save:
+        trash = True
+        if (args.policy != 'mpc' and not _target_in_frame()):
+            print("## Out of frame. Press stop save (X) to save bag. Press trash (Y) to trash")
+            while True:
+                if _is_btn(_joy_stop_save_btn):
+                    trash = False
+                    break
+                elif _is_btn(_joy_stop_trash_btn):
+                    trash = True
+                    break
+
+
+        if not trash or _joy_stop_save_btn_pressed or mpc_save:
             print("## Saving Rollout as", _rosbag._output_bag_name)
             save = True
         else:

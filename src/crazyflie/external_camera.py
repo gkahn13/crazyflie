@@ -141,8 +141,8 @@ class ExternalCamera:
         # lowBoundHSV = (1, 175, 20)
         # highBoundHSV = (18, 255, 255)
         # config 2 (high light)
-        lowBoundHSV = (1, 140, 20)
-        highBoundHSV = (26, 255, 255)
+        lowBoundHSV = (1, 80, 20)
+        highBoundHSV = (20, 255, 255)
         # first blur to remove high frequency noise
 
         imblur = cv2.GaussianBlur(image, (7, 7), 0)
@@ -210,6 +210,8 @@ class ExternalCamera:
                 area = a
 
         cur_rect = (cx, cy, area)
+
+        # print("CX %.3f, CY: %.3f, A: %.8f" % (cx, cy, area))
 
         # update consecutive stability if we are close to previous estimate and if we found something this iteration
         if (cur_rect[0] - self.last_rect[0])**2 + (cur_rect[1] - self.last_rect[1])**2 < max_pixel_motion ** 2 and cur_rect != (0,0,0):

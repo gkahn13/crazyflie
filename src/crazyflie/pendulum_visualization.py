@@ -34,9 +34,10 @@ HEIGHT = 480
 
 class PendulumVisualization:
 
-    def __init__(self, ID, raw, num_trajectories):
+    def __init__(self, ID, dt, raw, num_trajectories):
         self._id = ID
         self._raw = raw
+        self._dt = dt
         self._num_trajectories = num_trajectories
         self.rosbag_unnormalized = False
 
@@ -110,7 +111,7 @@ class PendulumVisualization:
         self.ax_forwardback.set_title("Forward Back")
         self.ax_forwardback.set_ylim([-1., 1.]) # vertical
 
-        self.ani = animation.FuncAnimation(self.fig, self.update_figure, blit=False, repeat=False, interval=80)
+        self.ani = animation.FuncAnimation(self.fig, self.update_figure, blit=False, repeat=False, interval=int(self._dt * 1000))
 
         # objects
         self.img = None
@@ -139,6 +140,12 @@ class PendulumVisualization:
         if self.latest_target_vector is not None:
             # print(self.latest_target_vector)
             # determine color range
+            center = self.convert_to_pixel(self.latest_target_vector.vector.x, self.latest_target_vector.vector.y)
+            side = np.sqrt(self.latest_target_vector.vector.z * WIDTH * HEIGHT)
+
+            upperleft = (int(center[0] - side/2), int(center[1] - side/2))
+            bottomright = (int(center[0] + side/2), int(center[1] + side/2))
+            cv2.rectangle(dup_img, upperleft, bottomright, (0,255,0), 3)
 
             costs = [None] * len(self.latest_traj_markers)
             for i, traj_marker in enumerate(self.latest_traj_markers):
@@ -164,7 +171,12 @@ class PendulumVisualization:
 
         # draw goal position on image
         if self.latest_goal_vector:
-            cv2.circle(dup_img, self.convert_to_pixel(self.latest_goal_vector.vector.x, self.latest_goal_vector.vector.y), 5, (0,0,255), -3)
+            goal_pt = self.convert_to_pixel(self.latest_goal_vector.vector.x, self.latest_goal_vector.vector.y)
+            side = np.sqrt(self.latest_goal_vector.vector.z * WIDTH * HEIGHT)
+            upperleft = (int(goal_pt[0] - side/2), int(goal_pt[1] - side/2))
+            bottomright = (int(goal_pt[0] + side/2), int(goal_pt[1] + side/2))
+            cv2.rectangle(dup_img, upperleft, bottomright, (0,0,255), 3)
+            cv2.circle(dup_img, goal_pt, 5, (0,0,255), -3)
 
         # draw updated image
         if self.img is None:
