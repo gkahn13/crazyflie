@@ -14,7 +14,7 @@ def make_parser():
     parser = argparse.ArgumentParser(description='script to read and combine rosbag data',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-l','--input_list', nargs='+', help='list of input rosbags', required=True)
-    parser.add_argument('-lv','--latent_var', type=float, help='latent var for this episode', required=True)
+    parser.add_argument('-lv','--latent_var', type=str, help='latent var for this episode', default='None')
     parser.add_argument('-o', '--output_file', type=str, default='rosbag_data.mat',
                         help='output file for storing mat data')
     parser.add_argument('-n', '--normalize', action='store_true', help='normalize rosbag states to known pixel width, height, and max area')
@@ -32,6 +32,13 @@ def bag_and_save(args, train):
     topics = ['target_vector', 'motion']
     if args.rewards:
         topics += ['reward_vector']
+
+    if args.latent_var == 'None':
+        print('WARNING: Attempting to read lv from bag')
+        topics += ['latent_vector']
+        raise NotImplementedError
+    else:
+        const_latent_var = float(args.latent_var) # will error if not a float
 
     def get_intersecting_topics(bag_topics):
         final_topics = []
@@ -165,7 +172,7 @@ def bag_and_save(args, train):
                         # append action and latest state
                         states.append(np.copy(state))
                         acs.append(np.copy(r_ac))
-                        latent.append(np.array([args.latent_var]))
+                        latent.append(np.array([const_latent_var]))
 
                         state_counts.append(tmp_state_count)
 

@@ -49,9 +49,12 @@ class PendulumVisualization:
         self.latest_ac_marker = None # rollout of best action seq
         self.latest_goal_vector = None
         self.latest_target_vector = None
+        self.latest_latent_vector = None
 
         self.timer = SimpleTimer(start=True)
         self.timer_lock = Lock()
+
+        self.latent_lock = Lock()
 
         self.setup_ros()
         self.setup_figure()
@@ -63,6 +66,7 @@ class PendulumVisualization:
         self.action_sub = rospy.Subscriber('mpc/action_vector', Vector3Stamped, self.action_cb)
         self.ac_marker_sub = rospy.Subscriber('mpc/action_marker', Marker, self.ac_marker_cb)
         self.goal_sub = rospy.Subscriber('mpc/goal_vector', Vector3Stamped, self.goal_vector_cb)
+        self.latent_sub = rospy.Subscriber('mpc/latent_vector', Vector3Stamped, self.latent_vector_cb)
 
         #need to facilitate a set of publishers per cf node
         if self._raw:
@@ -78,11 +82,14 @@ class PendulumVisualization:
         self.fig = plt.figure(figsize=(16,8))
         self.gs = gridspec.GridSpec(ncols=3, nrows=3, figure=self.fig)
 
-        self.axImg = self.fig.add_subplot(self.gs[:,0])
+        self.axImg = self.fig.add_subplot(self.gs[:2,0])
         self.ax3D = self.fig.add_subplot(self.gs[:2,1], projection='3d')
         self.ax_updown = self.fig.add_subplot(self.gs[0,2])
         self.ax_leftright = self.fig.add_subplot(self.gs[1,2])
         self.ax_forwardback = self.fig.add_subplot(self.gs[2,2])
+
+        self.ax_latent_mean = self.fig.add_subplot(self.gs[2,:2])
+        # self.ax_latent_std = self.fig.add_subplot(self.gs[2,1])
 
         # Setting the Image axes properties
         self.axImg.set_axis_off()
@@ -110,6 +117,20 @@ class PendulumVisualization:
 
         self.ax_forwardback.set_title("Forward Back")
         self.ax_forwardback.set_ylim([-1., 1.]) # vertical
+
+        self.ax_latent_mean.set_title("Latent mean") # vertical
+        self.ax_latent_mean.set_ylim([-2, 2])
+        self.all_latent = []
+        self.all_latent_upper = []
+        self.all_latent_lower = []
+        self.ax_latent_mean_plot, = self.ax_latent_mean.plot([0], [0], color='blue', marker='.')
+        self.new_latent = False
+
+        # self.ax_latent_mean_bar = self.ax_latent_mean.bar([0], [0])
+
+        # self.ax_latent_std.set_title("Latent std") # vertical
+        # self.ax_latent_std.set_ylim([0, 3])
+        # self.ax_latent_std_bar = self.ax_latent_std.bar([0], [0])
 
         self.ani = animation.FuncAnimation(self.fig, self.update_figure, blit=False, repeat=False, interval=int(self._dt * 1000))
 
@@ -214,6 +235,32 @@ class PendulumVisualization:
                     self.leftright_barh[i].set_width(lr[i])
                     self.forwardback_barv[i].set_height(fb[i])
 
+        # draw latent
+        self.latent_lock.acquire()
+        if self.new_latent:
+            self.new_latent = False
+            self.latent_lock.release()
+            mean = self.latest_latent_vector.vector.x
+            std = self.latest_latent_vector.vector.y
+
+            self.all_latent.append(mean)
+            self.all_latent_upper.append(mean + std)
+            self.all_latent_lower.append(mean - std)
+
+            self.ax_latent_mean.collections.clear()
+            x = range(len(self.all_latent))
+            self.ax_latent_mean_plot.set_xdata(x)
+            self.ax_latent_mean_plot.set_ydata(self.all_latent)
+            self.ax_latent_mean.fill_between(x, self.all_latent_lower, self.all_latent_upper, facecolor='blue', alpha=0.4)
+        else:
+            self.latent_lock.release()
+            self.all_latent.clear()
+            self.all_latent_upper.clear()
+            self.all_latent_lower.clear()
+
+            # self.ax_latent_mean_bar[0].set_height(mean)
+            # self.ax_latent_std_bar[0].set_height(std)
+
         # print(time.time())
 
     # min cost is green, the rest are various shades of white on a log scale
@@ -264,6 +311,12 @@ class PendulumVisualization:
 
     def target_cb(self, msg):
         self.latest_target_vector = msg
+
+    def latent_vector_cb(self, msg):
+        self.latent_lock.acquire()
+        self.new_latent = True
+        self.latent_lock.release()
+        self.latest_latent_vector = msg
 
     ## THREADS ##
     def run(self):

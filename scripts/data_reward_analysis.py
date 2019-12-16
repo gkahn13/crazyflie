@@ -92,12 +92,16 @@ if __name__ == "__main__":
         nonzero_pts_list = []
 
         for i in range(len(all_rew_list)):
-            # import    ipdb; ipdb.set_trace()
-            starting_points[i] = np.nonzero(np.abs(all_rew_list[i]) > 1e-8)[0][0]
+            start_pt = np.nonzero(np.abs(all_rew_list[i]) > 1e-8)
+            if len(start_pt[0]) == 0:
+                starting_points[i] = 0
+            else:
+                starting_points[i] = start_pt[0][0] 
             assert len(np.nonzero(all_rew_list[i][:starting_points[i]])[0]) == 0
             nonzero_pts = all_rew_list[i][starting_points[i]:]
             nonzero_pts_list.append(nonzero_pts)
-            axs[1].plot(range(len(nonzero_pts)), nonzero_pts, label="ep %d, avg %.2f" % (i, np.mean(nonzero_pts)), marker='.')
+            if len(nonzero_pts) > 0: # this is false if the episode never started
+                axs[1].plot(range(len(nonzero_pts)), nonzero_pts, label="ep %d, avg %.2f" % (i, np.mean(nonzero_pts)), marker='.')
 
         all_data = np.concatenate(nonzero_pts_list, axis=0)
         axs[1].set_xlabel("time step")

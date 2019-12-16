@@ -24,6 +24,7 @@ import os
 import imutils
 
 from sensor_msgs.srv import SetCameraInfo
+from .utils import SimpleTimer
 # from threading import Thread
 # from Queue import Queue
 
@@ -34,68 +35,15 @@ Q_MAX_LEN = 6
 WIDTH = 640
 HEIGHT = 480
 
-class SimpleTimer:
-    def __init__(self, start=False):
-        if start:
-            self.start_time = time.time()
-        self.all_times = []
+class StableTrack:
 
-    def reset(self):
-        self.start_time = time.time()
-        self.all_times = []
-
-    def record(self):
-        self.all_times.append(time.time())
-
-    def format_string(self):
-        assert hasattr(self, "start_time") and len(self.all_times) > 0 and self.start_time < self.all_times[0]
-
-        string = ""
-        all_with_start = [self.start_time] + self.all_times
-        for i,t in enumerate(self.all_times):
-            diff = t - all_with_start[i]
-            string += "T%d: %.7f, " % (i, diff)
-
-        string += "TOTAL: %.7f" % (self.all_times[-1] - self.start_time)
-
-        return string
-
-class ExternalCamera:
-
-    # DO_NOTHING_CMD = CFMotion()
-
-    def __init__(self, cam_id, raw):
-        self.cam_id = cam_id
-        self.raw = raw
-
-        self.bridge = CvBridge()
-        self.mat = None
-
-        self.normalize = True
-
+    def __init__(self):
         self.is_stable = False
         self.stable_frame_cnt = 0 # don't need to be consecutive
         self.last_rect = (0,0,0)
         self.stable_rect = (0,0,0)
         self.stable_rect_history = []
         self.unstable_frame_cnt = 0 # consecutive
-
-        self.timer = SimpleTimer()
-
-        #need to facilitate a set of publishers per cf node
-        if self.raw:
-            self.image_pub = rospy.Publisher('extcam/image', Image, queue_size=10)
-        else:
-            self.image_pub = rospy.Publisher('extcam/image', CompressedImage, queue_size=10)
-        
-
-        self.comp_image_pub = rospy.Publisher('extcam/image/compressed', CompressedImage, queue_size=10)
-        self.raw_image_pub = rospy.Publisher('extcam/image_raw', Image, queue_size=10)
-        
-        self.target_pos_pub = rospy.Publisher('extcam/target_vector', Vector3Stamped, queue_size=10)
-
-        #service
-        self.cam_info_service = rospy.Service('extcam/set_camera_info', SetCameraInfo, self.handle_cam_info)
 
     def set_stable(self):
         self.is_stable = True
@@ -128,21 +76,92 @@ class ExternalCamera:
         else:
             raise NotImplementedError('get next stable invalid method')
 
-    ## HELPERS ##
-    def get_target_pix_and_size(self, image):
-        sensitivity = 5
+    # curr rect is (x,y,ar)
+    def apply(self, cur_rect):
 
         max_pixel_motion = 50 # pixel jump per consecutive frame
 
-        lowBoundRGB = (0, 100, 0)
-        highBoundRGB = (150, 255, 150)
+        # update consecutive stability if we are close to previous estimate and if we found something this iteration
+        if (cur_rect[0] - self.last_rect[0])**2 + (cur_rect[1] - self.last_rect[1])**2 < max_pixel_motion ** 2 and cur_rect != (0,0,0):
+            self.stable_frame_cnt += 1
+            self.unstable_frame_cnt = 0
+            # stable if stable_frame_cnt is bigger than thresh
+            if self.stable_frame_cnt > N_STABLE:
+                self.set_stable()
+            # update stable rect whenever we are within stability
+            if self.is_stable:
+                self.stable_rect = cur_rect
 
-        # orange (low light)
-        # lowBoundHSV = (1, 175, 20)
-        # highBoundHSV = (18, 255, 255)
-        # config 2 (high light)
-        lowBoundHSV = (1, 80, 20)
-        highBoundHSV = (20, 255, 255)
+            # add this rect to history since we received a stable point
+            self.stable_rect_history.append(cur_rect)
+            # truncate queue
+            while len(self.stable_rect_history) > Q_MAX_LEN:
+                self.stable_rect_history.pop(0)
+        else:
+            self.unstable_frame_cnt += 1
+            # if we are currently unstable or if we need to switch to unstable
+            if not self.is_stable or self.unstable_frame_cnt > N_STABLE:
+                self.set_not_stable()
+                # print("NOT STABLE")
+
+            if self.is_stable:
+                # hold latest stable value
+                nextstab = self.get_next_stable(self.stable_rect_history, method='hold')
+                # print(self.stable_rect, nextstab)
+                self.stable_rect = nextstab
+                self.stable_rect_history.append(nextstab)
+
+        # print(len(cnts), len(found_list))
+
+        # print(self.stable_rect_history)
+        self.last_rect = cur_rect
+
+
+class ExternalCamera:
+
+    # DO_NOTHING_CMD = CFMotion()
+
+    def __init__(self, cam_id, raw, second_targ=True):
+        self.cam_id = cam_id
+        self.raw = raw
+
+        self.bridge = CvBridge()
+        self.mat = None
+
+        self.normalize = True
+
+        self.stable_pt = StableTrack()
+        self.second_targ = second_targ
+        if second_targ:
+            self.second_stable_pt = StableTrack()
+
+        # self.is_stable = False
+        # self.stable_frame_cnt = 0 # don't need to be consecutive
+        # self.last_rect = (0,0,0)
+        # self.stable_rect = (0,0,0)
+        # self.stable_rect_history = []
+        # self.unstable_frame_cnt = 0 # consecutive
+
+        self.timer = SimpleTimer()
+
+        #need to facilitate a set of publishers per cf node
+        if self.raw:
+            self.image_pub = rospy.Publisher('extcam/image', Image, queue_size=10)
+        else:
+            self.image_pub = rospy.Publisher('extcam/image', CompressedImage, queue_size=10)
+        
+        self.comp_image_pub = rospy.Publisher('extcam/image/compressed', CompressedImage, queue_size=10)
+        self.raw_image_pub = rospy.Publisher('extcam/image_raw', Image, queue_size=10)
+        
+        self.target_pos_pub = rospy.Publisher('extcam/target_vector', Vector3Stamped, queue_size=10)
+
+        #service
+        self.cam_info_service = rospy.Service('extcam/set_camera_info', SetCameraInfo, self.handle_cam_info)
+
+    ## HELPERS ##
+    def get_target_pix_and_size(self, image, st_pt, lowBoundHSV, highBoundHSV):
+        sensitivity = 5
+
         # first blur to remove high frequency noise
 
         imblur = cv2.GaussianBlur(image, (7, 7), 0)
@@ -213,56 +232,49 @@ class ExternalCamera:
 
         # print("CX %.3f, CY: %.3f, A: %.8f" % (cx, cy, area))
 
-        # update consecutive stability if we are close to previous estimate and if we found something this iteration
-        if (cur_rect[0] - self.last_rect[0])**2 + (cur_rect[1] - self.last_rect[1])**2 < max_pixel_motion ** 2 and cur_rect != (0,0,0):
-            self.stable_frame_cnt += 1
-            self.unstable_frame_cnt = 0
-            # stable if stable_frame_cnt is bigger than thresh
-            if self.stable_frame_cnt > N_STABLE:
-                self.set_stable()
-            # update stable rect whenever we are within stability
-            if self.is_stable:
-                self.stable_rect = cur_rect
+        ## time updates stable point
+        st_pt.apply(cur_rect)
 
-            # add this rect to history since we received a stable point
-            self.stable_rect_history.append(cur_rect)
-            # truncate queue
-            while len(self.stable_rect_history) > Q_MAX_LEN:
-                self.stable_rect_history.pop(0)
-        else:
-            self.unstable_frame_cnt += 1
-            # if we are currently unstable or if we need to switch to unstable
-            if not self.is_stable or self.unstable_frame_cnt > N_STABLE:
-                self.set_not_stable()
-                # print("NOT STABLE")
-
-            if self.is_stable:
-                # hold latest stable value
-                nextstab = self.get_next_stable(self.stable_rect_history, method='hold')
-                # print(self.stable_rect, nextstab)
-                self.stable_rect = nextstab
-                self.stable_rect_history.append(nextstab)
-
-        # print(len(cnts), len(found_list))
-
-        # print(self.stable_rect_history)
-        self.last_rect = cur_rect
-
-        if self.is_stable:
+        if st_pt.is_stable:
             # green if stable
-            cv2.circle(target_bgr, self.stable_rect[:2], 5, (0,255,0), -5)
+            cv2.circle(target_bgr, st_pt.stable_rect[:2], 5, (0,255,0), -5)
         else:
             cv2.circle(target_bgr, cur_rect[:2], 5, (0,0,255), -3)
 
         # first two are pixel x,y and third is blob size and fourth is thresholded img
-        return (self.stable_rect[0], self.stable_rect[1], self.stable_rect[2], target_bgr)
+        return (st_pt.stable_rect[0], st_pt.stable_rect[1], st_pt.stable_rect[2], target_bgr)
 
     def frame_process(self, frame):
         height, width, depth = frame.shape
 
         vs = Vector3Stamped()
         vs.header.stamp = rospy.Time.now()
-        vs.vector.x, vs.vector.y, vs.vector.z, thresh = self.get_target_pix_and_size(frame)
+
+        # lowBoundRGB = (0, 100, 0)
+        # highBoundRGB = (150, 255, 150)
+
+        # orange (low light)
+        # lowBoundHSV = (1, 175, 20)
+        # highBoundHSV = (18, 255, 255)
+        # config 2 (high light)
+        lowBoundFirstHSV = (1, 80, 20)
+        highBoundFirstHSV = (20, 255, 255)
+
+        # second target (blue)
+        lowBoundSecondHSV = (95, 140, 50)
+        highBoundSecondHSV = (120, 255, 255)
+
+        vs.vector.x, vs.vector.y, vs.vector.z, thresh = self.get_target_pix_and_size(frame, self.stable_pt, lowBoundFirstHSV, highBoundFirstHSV)
+        vs.header.frame_id = "first"
+        if self.second_targ:
+            x2, y2, z2, th2 = self.get_target_pix_and_size(frame, self.second_stable_pt, lowBoundSecondHSV, highBoundSecondHSV)
+            print(x2, y2, z2)
+            if x2 > 1e-6 and y2 > 1e-6 and z2 > 1e-10: # nonzero point, switch to this
+                vs.vector.x = x2
+                vs.vector.y = y2
+                vs.vector.z = z2
+                thresh = th2
+                vs.header.frame_id = "second" # this is how we encode which target it is in ros msg
 
         if self.normalize:
             vs.vector.x /= WIDTH # 0 to 1
