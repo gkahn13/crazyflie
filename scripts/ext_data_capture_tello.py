@@ -26,7 +26,8 @@ PITCH_AXIS = 3 #up 1
 YAW_AXIS = 0 #left 1
 
 # ALT_AXIS = 5 # D-pad up
-
+PICKUP_BTN = 4
+DROPOFF_BTN = 5
 
 # #RP motion
 # THROTTLE_SCALE = 0.1
@@ -43,9 +44,9 @@ VX_SCALE = 0.8
 VY_SCALE = 0.8
 VZ_SCALE = 0.8
 
-noise_vx = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VX_SCALE, 0.1*VX_SCALE], range=[-0.5*VX_SCALE, 0.5*VX_SCALE])
-noise_vy = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VY_SCALE, 0.1*VY_SCALE], range=[-0.5*VY_SCALE, 0.5*VY_SCALE])
-noise_dz = StepNoise(reset_step_range=[1, 4], step_range=[-0.3*VZ_SCALE, 0.3*VZ_SCALE], range=[-0.6*VZ_SCALE, 0.6*VZ_SCALE])
+noise_vx = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VX_SCALE, 0.1*VX_SCALE], range=[-0.6*VX_SCALE, 0.6*VX_SCALE])
+noise_vy = StepNoise(reset_step_range=[1, 4], step_range=[-0.1*VY_SCALE, 0.1*VY_SCALE], range=[-0.6*VY_SCALE, 0.6*VY_SCALE])
+noise_dz = StepNoise(reset_step_range=[1, 4], step_range=[-0.3*VZ_SCALE, 0.3*VZ_SCALE], range=[-0.4*VZ_SCALE, 0.4*VZ_SCALE])
 
 class RolloutRosbag:
     def __init__(self, rosbag_dir):
@@ -214,8 +215,10 @@ if __name__ == '__main__':
         (_ros_prefix + 'pose', PoseStamped),
         (_ros_prefix + 'twist', TwistStamped),
         (_ros_prefix + 'coll', Bool),
+        (_ros_prefix + 'mpc_extra_command', CFCommand),
         ('extcam/image', CompressedImage),
         ('extcam/target_vector', Vector3Stamped),
+        ('extcam/platform_vector', Vector3Stamped),
         ('mpc/trajectory_marker', Marker),
         ('mpc/action_vector', Vector3Stamped),
         ('mpc/action_marker', Marker),
@@ -305,6 +308,20 @@ if __name__ == '__main__':
                 _joy_estop_trash_btn_pressed = True
             if _is_btn(_joy_estop_pause_btn):
                 _joy_estop_pause_btn_pressed = True
+
+            if _is_btn(PICKUP_BTN):
+                cmd = CFCommand()
+                cmd.cmd = CFCommand.TAKEOFF
+                cmd.stamp.stamp = rospy.Time.now()
+                _mpc_extra_cmd_pub.publish(cmd)
+                print("[EDC]: sending pickup")
+
+            if _is_btn(DROPOFF_BTN):
+                cmd = CFCommand()
+                cmd.cmd = CFCommand.LAND
+                cmd.stamp.stamp = rospy.Time.now()
+                _mpc_extra_cmd_pub.publish(cmd)
+                print("[EDC]: sending dropoff")
 
             if _is_flow_motion:
                 _curr_motion.x = _curr_joy.axes[PITCH_AXIS] * VX_SCALE
@@ -458,11 +475,12 @@ if __name__ == '__main__':
 
     _joy_sub = rospy.Subscriber("/joy", Joy, joy_cb)
     _cmd_pub = rospy.Publisher(_ros_prefix + "command", CFCommand, queue_size=10)
+    _mpc_extra_cmd_pub = rospy.Publisher(_ros_prefix + "mpc_extra_command", CFCommand, queue_size=10)
     _motion_pub = rospy.Publisher(_ros_prefix + "motion", CFMotion, queue_size=10)
     
     threading.Thread(target=_background_thread).start()
 
-    time.sleep(5.0)
+    time.sleep(2.0)
 
     ## ISSUE TAKEOFF
 

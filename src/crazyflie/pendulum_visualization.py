@@ -49,6 +49,7 @@ class PendulumVisualization:
         self.latest_ac_marker = None # rollout of best action seq
         self.latest_goal_vector = None
         self.latest_target_vector = None
+        self.latest_platform_vector = None
         self.latest_latent_vector = None
 
         self.timer = SimpleTimer(start=True)
@@ -75,6 +76,7 @@ class PendulumVisualization:
             self.image_sub = rospy.Subscriber('extcam/image', CompressedImage, self.ext_image_cb)
             
         self.target_sub = rospy.Subscriber('extcam/target_vector', Vector3Stamped, self.target_cb)
+        self.target_sub = rospy.Subscriber('extcam/platform_vector', Vector3Stamped, self.platform_cb)
         
 
     def setup_figure(self):
@@ -120,6 +122,8 @@ class PendulumVisualization:
 
         self.ax_latent_mean.set_title("Latent mean") # vertical
         self.ax_latent_mean.set_ylim([-2, 2])
+        self.ax_latent_mean_dup = self.ax_latent_mean.twinx()  # instantiate a second axes that shares the same x-axis
+        self.ax_latent_mean_dup.set_ylim([-2, 2])
         self.all_latent = []
         self.all_latent_upper = []
         self.all_latent_lower = []
@@ -189,6 +193,14 @@ class PendulumVisualization:
                         cv2.line(dup_img, prev_pt, next_pt, color_list[i], 2)
                         prev_pt = next_pt
                     self.latest_traj_markers[i] = None
+
+        if self.latest_platform_vector is not None:
+            center = self.convert_to_pixel(self.latest_platform_vector.vector.x, self.latest_platform_vector.vector.y)
+            side = np.sqrt(self.latest_platform_vector.vector.z * WIDTH * HEIGHT)
+
+            upperleft = (int(center[0] - side/2), int(center[1] - side/2))
+            bottomright = (int(center[0] + side/2), int(center[1] + side/2))
+            cv2.rectangle(dup_img, upperleft, bottomright, (255,0,255), 3)
 
         # draw goal position on image
         if self.latest_goal_vector:
@@ -311,6 +323,9 @@ class PendulumVisualization:
 
     def target_cb(self, msg):
         self.latest_target_vector = msg
+
+    def platform_cb(self, msg):
+        self.latest_platform_vector = msg
 
     def latent_vector_cb(self, msg):
         self.latent_lock.acquire()

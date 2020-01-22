@@ -25,6 +25,7 @@ import imutils
 
 from sensor_msgs.srv import SetCameraInfo
 from .utils import SimpleTimer
+from .thresh_proc import get_morph, PLATFORM_HSV_LOW, PLATFORM_HSV_HIGH
 # from threading import Thread
 # from Queue import Queue
 
@@ -135,6 +136,7 @@ class ExternalCamera:
         if second_targ:
             self.second_stable_pt = StableTrack()
 
+        self.platform_pt = StableTrack()
         # self.is_stable = False
         # self.stable_frame_cnt = 0 # don't need to be consecutive
         # self.last_rect = (0,0,0)
@@ -154,26 +156,29 @@ class ExternalCamera:
         self.raw_image_pub = rospy.Publisher('extcam/image_raw', Image, queue_size=10)
         
         self.target_pos_pub = rospy.Publisher('extcam/target_vector', Vector3Stamped, queue_size=10)
+        self.platform_pos_pub = rospy.Publisher('extcam/platform_vector', Vector3Stamped, queue_size=10)
 
         #service
         self.cam_info_service = rospy.Service('extcam/set_camera_info', SetCameraInfo, self.handle_cam_info)
 
     ## HELPERS ##
-    def get_target_pix_and_size(self, image, st_pt, lowBoundHSV, highBoundHSV):
+    def get_target_pix_and_size(self, image, st_pt, lowBoundSecondHSV=None, highBoundSecondHSV=None):
         sensitivity = 5
 
         # first blur to remove high frequency noise
 
-        imblur = cv2.GaussianBlur(image, (7, 7), 0)
-        hsv = cv2.cvtColor(imblur, cv2.COLOR_BGR2HSV)
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        thresh = cv2.inRange(hsv, lowBoundHSV, highBoundHSV)
+        # imblur = cv2.GaussianBlur(image, (7, 7), 0)
+        # hsv = cv2.cvtColor(imblur, cv2.COLOR_BGR2HSV)
+        # gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        # thresh = cv2.inRange(hsv, lowBoundHSV, highBoundHSV)
 
-        morph = thresh
+        # morph = thresh
 
-        # erode and dilate
-        morph = cv2.erode(morph, (5,5))
-        morph = cv2.dilate(morph, (13,13))
+        # # erode and dilate
+        # morph = cv2.erode(morph, (5,5))
+        # morph = cv2.dilate(morph, (13,13))
+
+        morph = get_morph(image, lowBoundSecondHSV, highBoundSecondHSV)
 
         # target = cv2.bitwise_and(gray, gray, mask=morph)
         target_bgr = cv2.bitwise_and(image, image, mask=morph)
@@ -247,8 +252,11 @@ class ExternalCamera:
     def frame_process(self, frame):
         height, width, depth = frame.shape
 
-        vs = Vector3Stamped()
+        vs = Vector3Stamped() # target
         vs.header.stamp = rospy.Time.now()
+
+        pvs = Vector3Stamped() # platform
+        pvs.header.stamp = rospy.Time.now()
 
         # lowBoundRGB = (0, 100, 0)
         # highBoundRGB = (150, 255, 150)
@@ -257,15 +265,22 @@ class ExternalCamera:
         # lowBoundHSV = (1, 175, 20)
         # highBoundHSV = (18, 255, 255)
         # config 2 (high light)
-        lowBoundFirstHSV = (1, 80, 20)
-        highBoundFirstHSV = (20, 255, 255)
+        # lowBoundFirstHSV = (1, 80, 20)
+        # highBoundFirstHSV = (20, 255, 255)
+
+        # lowBoundFirstHSV = (17, 25, 0)
+        # highBoundFirstHSV = (40, 200, 255)
 
         # second target (blue)
         lowBoundSecondHSV = (95, 140, 50)
         highBoundSecondHSV = (120, 255, 255)
 
-        vs.vector.x, vs.vector.y, vs.vector.z, thresh = self.get_target_pix_and_size(frame, self.stable_pt, lowBoundFirstHSV, highBoundFirstHSV)
+        vs.vector.x, vs.vector.y, vs.vector.z, thresh = self.get_target_pix_and_size(frame, self.stable_pt)
         vs.header.frame_id = "first"
+
+        pvs.vector.x, pvs.vector.y, pvs.vector.z, thresh2 = self.get_target_pix_and_size(frame, self.platform_pt, PLATFORM_HSV_LOW, PLATFORM_HSV_HIGH)
+        pvs.header.frame_id = "platform"
+        
         if self.second_targ:
             x2, y2, z2, th2 = self.get_target_pix_and_size(frame, self.second_stable_pt, lowBoundSecondHSV, highBoundSecondHSV)
             print(x2, y2, z2)
@@ -281,6 +296,11 @@ class ExternalCamera:
             vs.vector.y /= HEIGHT #  0 to 1
             vs.vector.z /= (WIDTH * HEIGHT) # fractional area
 
+            pvs.vector.x /= WIDTH # 0 to 1
+            pvs.vector.y /= HEIGHT #  0 to 1
+            pvs.vector.z /= (WIDTH * HEIGHT) # fractional area
+
+
         rawimg = self.bridge.cv2_to_imgmsg(frame, encoding="rgb8")
         rawimg.header.stamp = rospy.Time.now()
         compimg = self.bridge.cv2_to_compressed_imgmsg(frame)
@@ -295,6 +315,7 @@ class ExternalCamera:
         self.comp_image_pub.publish(compimg)
 
         self.target_pos_pub.publish(vs)
+        self.platform_pos_pub.publish(pvs)
 
         return (('frame', frame), ('thresh', thresh))
 
@@ -306,15 +327,20 @@ class ExternalCamera:
     def run(self):
         try: 
             print('External Camera Node starting on cam ID: %d' % (self.cam_id))
+
+
             cap = cv2.VideoCapture(self.cam_id)
+            os.system('v4l2-ctl -d /dev/video%d -c exposure_auto=1' % self.cam_id)
+            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=20' % self.cam_id) # DAY
+            os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=100' % self.cam_id) # NIGHT
             # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
-            # cap.set(cv2.CAP_PROP_BRIGHTNESS, 0.8)
+            # cap.set(cv2.CAP_PROP_BRIGHTNESS, 100)
             # cap.set(cv2.CAP_PROP_CONTRAST, 0.2)
-            # cap.set(cv2.CAP_PROP_EXPOSURE, 0.08)
             # cap.set(cv2.CAP_PROP_AUTO_EXPOSURE, 0.25)
-            rate = rospy.Rate(20)
-
+            # cap.set(cv2.CAP_PROP_EXPOSURE, -10)
+            cap.set(cv2.CAP_PROP_AUTOFOCUS, 0) # turn the autofocus off
+            rate = rospy.Rate(30)
             while not rospy.is_shutdown():
 
                 self.timer.reset()
