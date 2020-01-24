@@ -52,10 +52,13 @@ class PendulumVisualization:
         self.latest_platform_vector = None
         self.latest_latent_vector = None
 
+        self.latest_loss_vector = None
+
         self.timer = SimpleTimer(start=True)
         self.timer_lock = Lock()
 
         self.latent_lock = Lock()
+        self.loss_lock = Lock()
 
         self.setup_ros()
         self.setup_figure()
@@ -68,6 +71,7 @@ class PendulumVisualization:
         self.ac_marker_sub = rospy.Subscriber('mpc/action_marker', Marker, self.ac_marker_cb)
         self.goal_sub = rospy.Subscriber('mpc/goal_vector', Vector3Stamped, self.goal_vector_cb)
         self.latent_sub = rospy.Subscriber('mpc/latent_vector', Vector3Stamped, self.latent_vector_cb)
+        self.loss_sub = rospy.Subscriber('mpc/loss_vector', Vector3Stamped, self.loss_vector_cb)
 
         #need to facilitate a set of publishers per cf node
         if self._raw:
@@ -81,16 +85,17 @@ class PendulumVisualization:
 
     def setup_figure(self):
         # Attaching 3D axis to the figure
-        self.fig = plt.figure(figsize=(16,8))
+        self.fig = plt.figure(figsize=(16,8), tight_layout=True)
         self.gs = gridspec.GridSpec(ncols=3, nrows=3, figure=self.fig)
 
-        self.axImg = self.fig.add_subplot(self.gs[:2,0])
-        self.ax3D = self.fig.add_subplot(self.gs[:2,1], projection='3d')
-        self.ax_updown = self.fig.add_subplot(self.gs[0,2])
-        self.ax_leftright = self.fig.add_subplot(self.gs[1,2])
-        self.ax_forwardback = self.fig.add_subplot(self.gs[2,2])
+        self.axImg = self.fig.add_subplot(self.gs[:2,:1])
+        self.ax3D = self.fig.add_subplot(self.gs[:2,1:2], projection='3d')
+        self.ax_updown = self.fig.add_subplot(self.gs[0,2:3])
+        self.ax_leftright = self.fig.add_subplot(self.gs[1,2:3])
+        self.ax_forwardback = self.fig.add_subplot(self.gs[2,2:3])
 
-        self.ax_latent_mean = self.fig.add_subplot(self.gs[2,:2])
+        self.ax_latent_mean = self.fig.add_subplot(self.gs[2,0:1])
+        self.ax_model_loss = self.fig.add_subplot(self.gs[2,1:2])
         # self.ax_latent_std = self.fig.add_subplot(self.gs[2,1])
 
         # Setting the Image axes properties
@@ -135,6 +140,13 @@ class PendulumVisualization:
         # self.ax_latent_std.set_title("Latent std") # vertical
         # self.ax_latent_std.set_ylim([0, 3])
         # self.ax_latent_std_bar = self.ax_latent_std.bar([0], [0])
+        self.ax_model_loss.set_title("Model loss") # vertical
+        # self.ax_model_loss.set_ylim([0, 10]) # vertical
+        # self.ax_model_loss.set_xlim(auto=True) # vertical
+        self.ax_model_loss_plot, = self.ax_model_loss.plot([0], [0], color='green', marker='.')
+        self.all_model_loss = []
+        self.new_loss = False
+        self.missed = 0
 
         self.ani = animation.FuncAnimation(self.fig, self.update_figure, blit=False, repeat=False, interval=int(self._dt * 1000))
 
@@ -200,7 +212,7 @@ class PendulumVisualization:
 
             upperleft = (int(center[0] - side/2), int(center[1] - side/2))
             bottomright = (int(center[0] + side/2), int(center[1] + side/2))
-            cv2.rectangle(dup_img, upperleft, bottomright, (255,0,255), 3)
+            cv2.rectangle(dup_img, upperleft, bottomright, (255,255,255), 3)
 
         # draw goal position on image
         if self.latest_goal_vector:
@@ -270,8 +282,30 @@ class PendulumVisualization:
             self.all_latent_upper.clear()
             self.all_latent_lower.clear()
 
+        # draw loss
+        self.loss_lock.acquire()
+        if self.new_loss:
+            self.new_loss = False
+            self.missed = 0
+            self.loss_lock.release()
+            loss = self.latest_loss_vector.vector.x
+
+            self.all_model_loss.append(loss)
+
+            # self.ax_model_loss.collections.clear()
+            x = range(len(self.all_model_loss))
+            self.ax_model_loss_plot.set_data(x, self.all_model_loss)
+            self.ax_model_loss.set_xlim([0, x[-1] + 1])
+            self.ax_model_loss.set_ylim([0, max(self.all_model_loss)])
+        else:
+            self.loss_lock.release()
+            self.missed += 1
+            if self.missed > 2:
+                self.all_model_loss.clear()
+
             # self.ax_latent_mean_bar[0].set_height(mean)
             # self.ax_latent_std_bar[0].set_height(std)
+
 
         # print(time.time())
 
@@ -332,6 +366,12 @@ class PendulumVisualization:
         self.new_latent = True
         self.latent_lock.release()
         self.latest_latent_vector = msg
+
+    def loss_vector_cb(self, msg):
+        self.loss_lock.acquire()
+        self.new_loss = True
+        self.loss_lock.release()
+        self.latest_loss_vector = msg
 
     ## THREADS ##
     def run(self):

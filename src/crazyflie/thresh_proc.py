@@ -41,8 +41,8 @@ HIGHBOUNDHSV = (20, 255, 255)
 
 ## GREEN
 
-PLATFORM_HSV_LOW = (70, 0, 30)
-PLATFORM_HSV_HIGH = (90, 255, 100)
+PLATFORM_HSV_LOW = (70, 40, 30)
+PLATFORM_HSV_HIGH = (90, 255, 115)
 
 ## STATIC HELPER ## 
 def get_morph(image, lowBoundHSV=None, highBoundHSV=None):

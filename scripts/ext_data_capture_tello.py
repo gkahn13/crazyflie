@@ -193,7 +193,7 @@ if __name__ == '__main__':
     _joy_stop_trash_btn = 3 # Y
     _joy_stop_save_btn = 0 # X
     _joy_estop_trash_btn = 2 # B
-    _joy_estop_pause_btn = 5 # RB
+    _joy_estop_pause_btn = 9 # start btn
 
     _joy_stop_trash_btn_pressed = False
     _joy_stop_save_btn_pressed = False
@@ -225,6 +225,7 @@ if __name__ == '__main__':
         ('mpc/goal_vector', Vector3Stamped),
         ('mpc/reward_vector', Vector3Stamped),
         ('mpc/latent_vector', Vector3Stamped),
+        ('mpc/loss_vector', Vector3Stamped),
         # ('/joy', Joy),
     ]
 
