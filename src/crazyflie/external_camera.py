@@ -122,7 +122,7 @@ class ExternalCamera:
 
     # DO_NOTHING_CMD = CFMotion()
 
-    def __init__(self, cam_id, raw, second_targ=True):
+    def __init__(self, cam_id, raw, second_targ=False):
         self.cam_id = cam_id
         self.raw = raw
 
@@ -331,8 +331,14 @@ class ExternalCamera:
 
             cap = cv2.VideoCapture(self.cam_id)
             os.system('v4l2-ctl -d /dev/video%d -c exposure_auto=1' % self.cam_id)
-            os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=60' % self.cam_id) # DAY
-            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=100' % self.cam_id) # NIGHT
+            
+            os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=60' % self.cam_id)
+            
+            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=25' % self.cam_id) # DAY
+            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=51' % self.cam_id) # NIGHT
+
+            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=60' % self.cam_id) # DAY
+            # os.system('v4l2-ctl -d /dev/video%d -c exposure_absolute=300' % self.cam_id) # NIGHT
             # cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
             # cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
             # cap.set(cv2.CAP_PROP_BRIGHTNESS, 100)

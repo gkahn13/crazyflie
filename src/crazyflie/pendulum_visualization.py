@@ -78,7 +78,7 @@ class PendulumVisualization:
             self.image_sub = rospy.Subscriber('extcam/image', Image, self.ext_image_cb)
         else:
             self.image_sub = rospy.Subscriber('extcam/image', CompressedImage, self.ext_image_cb)
-            
+
         self.target_sub = rospy.Subscriber('extcam/target_vector', Vector3Stamped, self.target_cb)
         self.target_sub = rospy.Subscriber('extcam/platform_vector', Vector3Stamped, self.platform_cb)
         
@@ -182,7 +182,7 @@ class PendulumVisualization:
 
             upperleft = (int(center[0] - side/2), int(center[1] - side/2))
             bottomright = (int(center[0] + side/2), int(center[1] + side/2))
-            cv2.rectangle(dup_img, upperleft, bottomright, (0,255,0), 3)
+            cv2.rectangle(dup_img, upperleft, bottomright, (0,255,0), 2)
 
             costs = [None] * len(self.latest_traj_markers)
             for i, traj_marker in enumerate(self.latest_traj_markers):
@@ -212,7 +212,7 @@ class PendulumVisualization:
 
             upperleft = (int(center[0] - side/2), int(center[1] - side/2))
             bottomright = (int(center[0] + side/2), int(center[1] + side/2))
-            cv2.rectangle(dup_img, upperleft, bottomright, (255,255,255), 3)
+            cv2.rectangle(dup_img, upperleft, bottomright, (255,0,255), 2)
 
         # draw goal position on image
         if self.latest_goal_vector:
@@ -275,6 +275,7 @@ class PendulumVisualization:
             x = range(len(self.all_latent))
             self.ax_latent_mean_plot.set_xdata(x)
             self.ax_latent_mean_plot.set_ydata(self.all_latent)
+            self.ax_latent_mean.set_ylim([min(-1, min(self.all_latent)), max(1, max(self.all_latent))])
             self.ax_latent_mean.fill_between(x, self.all_latent_lower, self.all_latent_upper, facecolor='blue', alpha=0.4)
         else:
             self.latent_lock.release()

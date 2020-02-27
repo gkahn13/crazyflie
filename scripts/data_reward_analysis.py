@@ -83,7 +83,9 @@ if __name__ == "__main__":
         axs[0].bar(failed_idxs, ep_rew[failed_idxs])
         axs[0].set_xlabel("episode")
         axs[0].set_ylabel("rewards")
-        axs[0].set_title("Success Episode Rewards (Avg = %f)" % np.mean(ep_rew[~failed_ep.astype(bool)]))
+        mu = np.mean(ep_rew[~failed_ep.astype(bool)])
+        sig = np.std(ep_rew[~failed_ep.astype(bool)])
+        axs[0].set_title("Success Episode Rewards (Mu: %f, Sig: %f)" % (mu,sig))
 
         # 2. plotting rewards for each trajectory
         all_rew_list = np.split(data['rewards'][:, 1], np.cumsum(episode_sizes)[:-1], axis=0)

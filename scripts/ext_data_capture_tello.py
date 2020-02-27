@@ -26,8 +26,9 @@ PITCH_AXIS = 3 #up 1
 YAW_AXIS = 0 #left 1
 
 # ALT_AXIS = 5 # D-pad up
-PICKUP_BTN = 4
-DROPOFF_BTN = 5
+PICKUP_BTN = 4 # LB
+DROPOFF_BTN = 5 # RB
+PD_STOP_BTN = 8 # back btn
 
 # #RP motion
 # THROTTLE_SCALE = 0.1
@@ -324,6 +325,13 @@ if __name__ == '__main__':
                 _mpc_extra_cmd_pub.publish(cmd)
                 print("[EDC]: sending dropoff")
 
+            if _is_btn(PD_STOP_BTN):
+                cmd = CFCommand()
+                cmd.cmd = CFCommand.ESTOP
+                cmd.stamp.stamp = rospy.Time.now()
+                _mpc_extra_cmd_pub.publish(cmd)
+                print("[EDC]: sending pd stop")
+
             if _is_flow_motion:
                 _curr_motion.x = _curr_joy.axes[PITCH_AXIS] * VX_SCALE
                 _curr_motion.y = - _curr_joy.axes[ROLL_AXIS] * VY_SCALE
@@ -361,7 +369,7 @@ if __name__ == '__main__':
                             _curr_motion.x += noise_vx.step() #random.random() * VXY_NOISE_STD
                         if abs(_curr_motion.y) < 1e-8:
                             _curr_motion.y += noise_vy.step() #random.random() * VXY_NOISE_STD
-                        if abs(_curr_motion.dz) < 1e8:
+                        if abs(_curr_motion.dz) < 1e-8:
                             _curr_motion.dz += noise_dz.step() #andom.random() * VZ_NOISE_STD
 
                     if args.action_bounding:
