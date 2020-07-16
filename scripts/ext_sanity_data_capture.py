@@ -18,7 +18,7 @@ from crazyflie.msg import CFData, CFMotion, CFCommand
 from geometry_msgs.msg import PoseStamped, TwistStamped, Vector3Stamped
 from sensor_msgs.msg import CompressedImage, Imu, Joy
 from std_msgs.msg import Bool
-from crazyflie.sim import PointMassCrazyflieSimulator
+from crazyflie.sim.point_mass_cf_simulator import PointMassCrazyflieSimulator
 
 plt.ion()
 
@@ -137,6 +137,7 @@ if __name__ == '__main__':
     parser.add_argument('--action-bounding', action='store_true')
     parser.add_argument('--enable-yaw', action='store_true')
     parser.add_argument('--lag', type=int, default=0, help="how much artificial lag to add to system")
+    parser.add_argument('--num-latent', type=int, default=1, help="how much artificial lag to add to system")
     # parser.add_argument('-ca', '--ctrl_arg', action='append', nargs=2, default=[])
     # parser.add_argument('-o', '--override', action='append', nargs=2, default=[])
     # parser.add_argument('-model-dir', type=str, required=True)
@@ -151,7 +152,7 @@ if __name__ == '__main__':
     # _is_flow_motion = args.is_flow
     _rosbag = RolloutRosbag(args.rosbag_dir, realtime=False)
     # ensuring no dropped msgs
-    _env = PointMassCrazyflieSimulator(_ros_prefix, 0.1, use_ros=False, lag=args.lag)
+    _env = PointMassCrazyflieSimulator(_ros_prefix, 0.1, use_ros=False, lag=args.lag, with_figure=True, num_latent=args.num_latent)
 
     # _ros_msg_queue_buffer = dict()
 
@@ -159,6 +160,7 @@ if __name__ == '__main__':
         # (_ros_prefix + 'image', CompressedImage),
         (_ros_prefix + 'motion', CFMotion),
         ('extcam/target_vector', Vector3Stamped),
+        ('extcam/latent_vector', Vector3Stamped),
         # ('/joy', Joy),
     ]
 

@@ -49,10 +49,12 @@ class PointMassCrazyflieSimulator:
 
     VISUAL_HIST_LEN = 500
 
-    def __init__(self, ros_prefix, dt, use_ros=True, queue_size=10, lag=0, clip=True, with_figure=True):
+    def __init__(self, ros_prefix, dt, use_ros=True, queue_size=10, lag=0, clip=True, with_figure=True, num_latent=1):
         self.dt = dt
         self.use_ros = use_ros
         self.ros_prefix = ros_prefix
+        self.num_latent = num_latent
+        assert num_latent > 0 and num_latent < 5  # [1,4]
         assert lag >= 0
         self.lag = lag
         self._clip = clip
@@ -60,6 +62,7 @@ class PointMassCrazyflieSimulator:
         if self.use_ros:
             self.motion_pub = rospy.Publisher(ros_prefix + "motion", CFMotion, queue_size=queue_size)
             self.target_pub = rospy.Publisher("extcam/target_vector", Vector3Stamped, queue_size=queue_size)
+            self.latent_pub = rospy.Publisher("extcam/latent_vector", Vector3Stamped, queue_size=queue_size)
 
         if with_figure:
             self.fig = plt.figure(figsize=(16,8))
@@ -69,9 +72,12 @@ class PointMassCrazyflieSimulator:
         # self.plot_elem, = self.ax.plot([], [])
         self.reset()
 
-    def reset(self, target=None):
+    def reset(self, target=None, ret_latent=False):
         self.action = CFMotion()
         self.action.is_flow_motion = True
+
+        # choose a latent context randomly
+        self._cur_latent = random.choice(range(self.num_latent))
 
         self.target_state = Vector3Stamped()
         if target is not None:
@@ -83,16 +89,15 @@ class PointMassCrazyflieSimulator:
             self.target_state.vector.y = 0.5
             self.target_state.vector.z = 0.01
 
-        # state buffer, top corresponds to next state
-        self.state_buffer = [copy.deepcopy(self.target_state) for _ in range(self.lag)]
+        # state buffer, top corresponds to current state
+        self.state_buffer = [copy.deepcopy(self.target_state) for _ in range(self.lag + 1)]
 
+        if ret_latent:
+            return self.target_state, self._cur_latent
         return self.target_state
 
     def get_obs(self):
-        if self.lag > 0:
-            return copy.deepcopy(self.state_buffer[0])
-        else:
-            return copy.deepcopy(self.target_state)
+        return copy.deepcopy(self.state_buffer[0])
 
     def clip(self, val, low, up):
         return max(low, min(val, up))
@@ -101,23 +106,31 @@ class PointMassCrazyflieSimulator:
         if dt is None:
             dt = self.dt
 
+        ax, ay, adz = action.x, action.y, action.dz
+
         # state update (x = vx * dy)
+
+        if self._cur_latent % 2 == 1:
+            ax *= -1  # flip the action
+        if self._cur_latent // 2 == 1:
+            adz *= -1
 
         # no clip (temporary)
         if self._clip:
-            self.target_state.vector.x = self.clip(self.target_state.vector.x + action.x * dt, self.X_RANGE[0], self.X_RANGE[1])
-            self.target_state.vector.y = self.clip(self.target_state.vector.y + action.dz * dt, self.Y_RANGE[0], self.Y_RANGE[1])
-            self.target_state.vector.z = self.clip(self.target_state.vector.z + action.y * dt, self.Z_RANGE[0], self.Z_RANGE[1])
+            self.target_state.vector.x = self.clip(self.target_state.vector.x + ax * dt, self.X_RANGE[0], self.X_RANGE[1])
+            self.target_state.vector.y = self.clip(self.target_state.vector.y + adz * dt, self.Y_RANGE[0], self.Y_RANGE[1])
+            self.target_state.vector.z = self.clip(self.target_state.vector.z + ay * dt, self.Z_RANGE[0], self.Z_RANGE[1])
         else:
-            self.target_state.vector.x += action.x * dt
-            self.target_state.vector.y += action.dz * dt
-            self.target_state.vector.z += action.y * dt
+            self.target_state.vector.x += ax * dt
+            self.target_state.vector.y += adz * dt
+            self.target_state.vector.z += ay * dt
 
         self.state_buffer.append(copy.deepcopy(self.target_state))
         # self.x_history.append(self.target_state.vector.x)
         # self.y_history.append(self.target_state.vector.y)
+        self.state_buffer.pop(0)
 
-        return self.state_buffer.pop(0)
+        return self.get_obs()
 
     def run_random_motion(self, niter, render=False, correlated=True, realtime=False, rosbag=None):
 
@@ -174,15 +187,21 @@ class PointMassCrazyflieSimulator:
             ac.stamp.stamp = rospy.Time(self._time.secs, self._time.nsecs)
             cur_obs.header.stamp = rospy.Time(self._time.secs, self._time.nsecs)
 
+            latent_vec = Vector3Stamped()
+            latent_vec.vector.x = self._cur_latent
+
             if self.use_ros:
                 self.motion_pub.publish(ac)
                 self.target_pub.publish(cur_obs)
+                self.latent_pub.publish(latent_vec)
 
             if rosbag:
                 rosbag.write("extcam/target_vector", cur_obs, cur_obs.header.stamp)
+                rosbag.write("extcam/latent_vector", latent_vec, cur_obs.header.stamp)
                 rosbag.write(self.ros_prefix + "motion", ac, ac.stamp.stamp)
                 rosbag._rosbag.flush()
 
+            # updates obs
             next_obs = self.step(self.action, self.dt)
 
             self.x_history.append(next_obs.vector.x)

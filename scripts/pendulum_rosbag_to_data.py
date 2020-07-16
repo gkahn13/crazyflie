@@ -36,7 +36,7 @@ def bag_and_save(args, train):
     if args.latent_var == 'None':
         print('WARNING: Attempting to read lv from bag')
         topics += ['latent_vector']
-        raise NotImplementedError
+        const_latent_var = None
     else:
         const_latent_var = float(args.latent_var) # will error if not a float
 
@@ -53,6 +53,7 @@ def bag_and_save(args, train):
     latent = []
     state = np.zeros(3)
     ac = np.zeros(3)
+    lat = 0
     last_n_acs = []
     last_n_ac_times = []
     time_diffs = []
@@ -172,7 +173,10 @@ def bag_and_save(args, train):
                         # append action and latest state
                         states.append(np.copy(state))
                         acs.append(np.copy(r_ac))
-                        latent.append(np.array([const_latent_var]))
+                        if const_latent_var is None:
+                            latent.append(np.array([lat]))
+                        else:
+                            latent.append(np.array([const_latent_var]))
 
                         state_counts.append(tmp_state_count)
 
@@ -194,6 +198,9 @@ def bag_and_save(args, train):
                 vec = msg.vector
                 cur_rew = np.array([vec.x, vec.y, vec.z])
                 sum_rewards += cur_rew # episode rewards
+
+            elif 'latent_vector' in topic:
+                lat = msg.vector.x
 
         episode_sizes.append(i)
         ep_rewards.append(sum_rewards)
@@ -244,6 +251,8 @@ def bag_and_save(args, train):
     ep_end_rew_dist = (np.mean(ep_end_rewards_np, axis=0), np.std(ep_end_rewards_np, axis=0))
     ep_end_rew_mm = (np.amin(ep_end_rewards_np, axis=0), np.amax(ep_end_rewards_np, axis=0))
 
+    lat_mm = (np.amin(latent_np, axis=0), np.amax(latent_np, axis=0))
+
     # normalized
     states_normalized = np.divide(states - s_dist[0], s_dist[1])
     acs_normalized = np.divide(acs - a_dist[0], a_dist[1])
@@ -266,6 +275,7 @@ def bag_and_save(args, train):
     print("## Episode Reward distribution (min, max): (%s, %s)" % ep_rew_mm)
     print("## End Reward distribution (mu, sig): (%s, %s)" % ep_end_rew_dist)
     print("## End Reward distribution (min, max): (%s, %s)" % ep_end_rew_mm)
+    print("## Latent distribution (min, max): (%s, %s)" % lat_mm)
     print("#############################################################")
 
     file_name = args.output_file
